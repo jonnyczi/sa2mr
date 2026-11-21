@@ -11,7 +11,17 @@ A VR / mixed-reality mod of **Sonic Adventure 2** for the **Valve Steam Frame**,
 - **Game base:** `external/OpenSA2`, a git clone of `kittycache9/OpenSA2`, a GPL-3.0 static recompilation of the 2012 Steam PC `sonic2app.exe`. The game process records D3D9 calls into a stream and a separate player process renders it (`host/d3d9gpu`, SDL3 GPU and Vulkan). Our VR player is `external/OpenSA2/host/xr/` (see its `README.md`).
 - **Room Run generator:** `roomrun/`, a standalone C++17 library plus CLIs, later linked into the XR host.
 
-The project root is **not** a git repo. `external/OpenSA2` is a git checkout with local, uncommitted changes. Don't commit unless the user asks. If you do commit there, follow its `AGENTS.md`: no tool or assistant attribution trailers, and run `python3 tools/public_check.py` first.
+**Git (user decision, 2026-11-21): commit your work at verified, stable points.**
+- **The project root** is a git repo on `main`. `external/`, `media/` (game screenshots), toolchains and logs are gitignored.
+- **`external/OpenSA2`** is its own checkout. Our changes go on its **`sa2mr`** branch; `main` tracks upstream. Follow its `AGENTS.md`: no tool or assistant attribution trailers, and run `python3 tools/public_check.py` before every commit.
+- **Never commit proprietary code or assets:**
+  - no SEGA exe, or anything generated or translated from it;
+  - nothing under OpenSA2's `private/`;
+  - no extracted meshes, textures or shaders;
+  - no game screenshots;
+  - not the regenerated `Documentation/receipts/s1-function-map-v1.json`.
+
+  Check `git diff --cached --stat` before each commit.
 
 ## User decisions (don't relitigate)
 
