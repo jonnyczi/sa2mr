@@ -1,0 +1,6 @@
+{"floor": [[0,0],[6.0,0],[6.0,4.2],[0,4.2]],
+ "boxes": [
+  {"center": [1.4, 3.6], "size": [2.0, 0.9], "yaw": 0, "height": 0.45, "label": "couch"},
+  {"center": [4.8, 3.3], "size": [1.6, 1.4], "yaw": 0, "height": 0.75, "label": "table"},
+  {"center": [5.6, 0.8], "size": [0.6, 1.2], "yaw": 0, "height": 1.9, "label": "fridge"}],
+ "player": {"pos": [3.0, 2.0], "radius": 0.7}}

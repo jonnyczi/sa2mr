@@ -1,0 +1,7 @@
+{"floor": [[0,0],[4.6,0],[4.6,3.8],[0,3.8]],
+ "boxes": [
+  {"center": [2.3, 3.3], "size": [2.0, 0.85], "yaw": 0, "height": 0.45, "label": "couch"},
+  {"center": [2.3, 2.15], "size": [1.1, 0.6], "yaw": 0, "height": 0.42, "label": "coffee table"},
+  {"center": [0.25, 1.2], "size": [0.4, 1.0], "yaw": 0, "height": 1.8, "label": "shelf"},
+  {"center": [4.1, 0.6], "size": [0.8, 0.8], "yaw": 0, "height": 0.75, "label": "side table"}],
+ "player": {"pos": [2.4, 1.0], "radius": 0.7}}

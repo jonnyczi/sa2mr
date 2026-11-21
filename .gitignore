@@ -1,0 +1,15 @@
+# OpenSA2 is its own git repo (our changes live on its sa2mr branch).
+/external/
+
+# Screenshots and eye dumps show SEGA's game content, and are large: keep them local.
+/media/
+
+# Build outputs, toolchains, logs
+/build-env/logs/
+/build-env/arm64/sysroot/
+/build-env/arm64/s5-tools/
+/build-env/arm64/test/home/
+/roomrun/build/
+
+# Local Claude settings
+/.claude/settings.local.json

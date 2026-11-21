@@ -1,0 +1,28 @@
+{
+  "library": "chao-race",
+  "notes": "Slow module library for Chao Race tracks around the room: same generator, Chao physics, no loops/springs/homing. Speeds unscaled per frame.",
+  "physics": {"runAccel": 0.02, "runMax": 1.6, "topSpeed": 4.0, "dragAbove": 0.02, "coastDecel": 0.02, "jumpV": 1.0, "grip": 0.2},
+  "modules": [
+    {"id": "start_gate", "kind": "start", "class": "forgiving", "len": [40, 40, 4], "maxCurv": 0.02, "walls": true, "fun": 0,
+     "entry": {"vMin": 0, "vMax": 16, "lat": 99, "head": 180}, "exit": "transfer"},
+    {"id": "grass_path", "kind": "track", "class": "forgiving", "len": [16, 200, 8], "maxCurv": 0.06, "walls": true, "fun": 0.05,
+     "entry": {"vMin": 0, "vMax": 16, "lat": 99, "head": 180}, "exit": "transfer"},
+    {"id": "hill", "kind": "ramp", "class": "forgiving", "len": [48, 240, 16], "maxCurv": 0.04, "maxSlope": 0.2, "dh": [-50, 50], "walls": true, "fun": 0.3,
+     "entry": {"vMin": 0, "vMax": 16, "lat": 99, "head": 180}, "exit": "transfer"},
+    {"id": "water_pool", "kind": "track", "class": "forgiving", "len": [48, 120, 8], "maxCurv": 0.03, "walls": true, "fun": 1.0,
+     "params": {"speedCap": 0.9},
+     "entry": {"vMin": 0, "vMax": 16, "lat": 99, "head": 180}, "exit": "transfer"},
+    {"id": "climb_wall", "kind": "rail", "class": "mover", "len": [32, 96, 16], "maxCurv": 0.02, "maxSlope": 0.9, "dh": [20, 60], "walls": true, "fun": 1.2,
+     "params": {"speedCap": 0.6, "minSpeed": 0.5, "friction": 0},
+     "entry": {"vMin": 0, "vMax": 16, "lat": 99, "head": 180}, "exit": "transfer"},
+    {"id": "fruit_patch", "kind": "track", "class": "forgiving", "len": [40, 80, 8], "maxCurv": 0.04, "walls": true, "fun": 0.8,
+     "params": {"speedCap": 1.2},
+     "entry": {"vMin": 0, "vMax": 16, "lat": 99, "head": 180}, "exit": "transfer"},
+    {"id": "slide_down", "kind": "rail", "class": "mover", "len": [48, 200, 16], "maxCurv": 0.1, "maxSlope": 0.5, "dh": [-60, -10], "walls": true, "fun": 0.9,
+     "params": {"minSpeed": 1.0, "friction": 0.002},
+     "entry": {"vMin": 0, "vMax": 16, "lat": 12, "head": 60}, "exit": "transfer"},
+    {"id": "hop_down", "kind": "drop", "class": "forgiving", "len": [32, 160, 4], "maxCurv": 0.012, "dh": [-30, -10], "walls": true, "fun": 0.6,
+     "params": {"lip": 8, "margin": 16},
+     "entry": {"vMin": 0, "vMax": 4.0, "lat": 99, "head": 60}, "exit": "transfer"}
+  ]
+}

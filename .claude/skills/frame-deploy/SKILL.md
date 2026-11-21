@@ -1,0 +1,72 @@
+---
+name: frame-deploy
+description: Build the native aarch64 Linux release of OpenSA2 (cross-compiled on x86_64 against Valve's sniper arm64 SDK sysroot), verify it, and deploy/run it on the Steam Frame over SSH. Use when asked to build for ARM64 or the Steam Frame, package a release, deploy to or test on the headset, or debug a Frame-only issue.
+---
+
+# Steam Frame: aarch64 build and deploy
+
+**Native Linux ARM64 only. Never the APK/Lepton route** (user decision). Model: `../xelee/tools/package_steam_frame.sh` and `frame_deploy.sh`, and `../xelee/docs/steam-frame.md`.
+
+## Build (cross-compiled on this x86_64 host)
+- **Prerequisite:** the x86_64 build is done (see `opensa2-build`). The lift, tables and the x86 glslang are reused.
+- `build-env/arm64/build_release.sh` builds the images, the sniper arm64 sysroot (`build-env/arm64/sysroot`), the arm64 host deps, the lifted image and the release.
+  - Output: `external/OpenSA2/private/generated/s7/release/linux-aarch64/` and `sa2mr-linux-aarch64.tar.gz`.
+  - Shell into the cross toolchain with `build-env/cross/run.sh '<cmd>'`. The arm64 pins override is `build-env/arm64/pins.json`.
+- **Packaging rules (xelee):**
+  - Bundle the `ldd` deps into `lib/`, except glibc/libm/libdl/libpthread/librt/libvulkan/libz.
+  - No symbol newer than GLIBC_2.31.
+  - Ship `lib/openxr/libopenxr_loader.so.1`. Steam's environment provides the SteamVR runtime.
+  - Split out the debug info.
+
+## How it's built (verified 2026-11-21)
+- **`sa2-game`** is the translated image (`perf_f80.py --target aarch64-linux-musl --mode double`, about 8 min), linked **static musl** with zig. It has no glibc dependency.
+- **Players, launcher and installer** use Debian's `aarch64-linux-gnu-g++-14` against the sniper sysroot, with static libstdc++. The newest symbol is GLIBC_2.30.
+- **`private/sa2mr/arm64/`** holds the drivers:
+  - `release_build_arm64.py`, which reuses `release_build.py`'s steps. Use `--only tables,game,players,install,launch,assemble,package` to rerun parts.
+  - `build_deps.sh` (SDL3, DXVK, zstd, OpenXR loader).
+  - `xwrap/`: compiler wrappers plus the CMake/meson cross files.
+- **Single steps:**
+  - `build-env/cross/run.sh 'bash private/sa2mr/arm64/build_deps.sh'`
+  - `build-env/cross/run.sh 'source tools/env.sh; .venv/bin/python private/sa2mr/arm64/release_build_arm64.py --only players'`
+- **Gotchas already solved:**
+  - GCC, not clang: the tree's duplicate-symbol check is GCC-specific.
+  - The cross toolchain's own glibc is hidden.
+  - `-fno-use-linker-plugin`.
+  - `-lpthread -lrt` and `-lstdc++ -lgcc` at link time.
+  - wayland-scanner 1.18 to match the SDK.
+  - The sysroot is mounted under `/usr/lib/gcc/` so the header-provenance check accepts it.
+- **Edited upstream files (x86-only FPU guards):** `host/d3d9gpu/test/shaderc.cpp`, `host/dxvk_smoke.cpp`.
+- **Last QEMU result:** `TEST_D3D9GPU_OK 5445`, `SA2_INSTALL_OK`, and `SA2_SELFTEST_OK` (title at 3085, menu at 3572), with lavapipe in about 27 min.
+
+## Verify without the headset (sparingly)
+- `build-env/arm64/build_release.sh test` runs install plus selftest **under QEMU**. It's slow and CPU-heavy, so only do it for occasional verification, never as the dev loop.
+- Cap it with `taskset -c 0-7` and tell the user it's running. Everyday testing happens on x86_64.
+
+## Deploy and run on the Frame (`FRAME_HOST`, default `steamos@frame.lan`; Developer Mode + SSH)
+```
+build-env/arm64/frame_deploy.sh deploy     # tarball -> ~/Applications/sa2mr (keeps an edited share/game.env)
+build-env/arm64/frame_deploy.sh install    # bin/sa2-install --source steam --yes (SA2 installed via Steam on the Frame)
+build-env/arm64/frame_deploy.sh selftest
+build-env/arm64/frame_deploy.sh run [args] # inside the running Steam client's env (display, audio, XR runtime)
+build-env/arm64/frame_deploy.sh log | fetch DIR | stop
+```
+- **The Frame is a real device the user is wearing.** Confirm before running things on it, and pull logs with `fetch` instead of guessing.
+- **Once the user has reported on a test, stop the game** (`frame_deploy.sh stop`) unless you still have questions that need it running. This is a standing user instruction.
+- **Verified on the real Frame (2026-11-21):**
+  - SteamOS 0.4.5.
+  - `SA2_INSTALL_OK` from a copied game folder: `rsync` the PC's SA2 folder to `~/sa2-gamefiles` (about 28 min over Wi-Fi), then `bin/sa2-install --source folder ~/sa2-gamefiles --yes`. Use this if SA2 isn't installed via Steam there.
+  - `SA2_SELFTEST_OK`.
+  - Turnip Adreno 750 has no 16/8-bit buffer access; the 32-bit fallback is automatic.
+  - **VR works** on SteamVR/OpenXR 2.18.2 with the Frame controller bindings. Launch with `FRAME_ENV="SA2_XR=1 [SA2_XR_MODE=diorama]" build-env/arm64/frame_deploy.sh run`.
+  - Settings are in the Frame's `~/Applications/sa2mr/share/game.env`. `deploy` keeps an edited copy. Use it for `SA2_TWEAKS`, `SA2_FOV_SCALE`, `SA2_REC_CAMERA=1`.
+  - **Flat mode has no gamepad on the Frame:** the controllers act as laser pointers, which shows the touch overlay. Use VR for input.
+  - Controller input needs the OpenXR session *focused*: the SteamVR dashboard must be closed.
+- **Frame specifics to expect:**
+  - Mesa Turnip on Adreno 750 with a single queue (`tu_emulate_second_queue`).
+  - SteamVR picks 72/90/120/144 Hz. **The user must set 120 Hz (or 60 Hz) in SteamVR** for the 60 fps game; 72 Hz judders (user-verified 2026-11-21). `XR_FB_display_refresh_rate` offers the app only 72 Hz.
+  - The Frame's `game.env` needs `vr-object-culling` in `SA2_TWEAKS` (added 2026-11-21).
+  - Passthrough is grayscale (`ALPHA_BLEND`).
+  - Controller profile `valve/frame_controller_valve` (bumper/shoulder name variants).
+  - No hand tracking, no scene mesh.
+
+Record anything new you learn about the Frame in `BUILD_NOTES.md` (ARM64 section) and in this skill.

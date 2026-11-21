@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(build-env/run.sh:*)",
+      "Bash(build-env/cross/run.sh:*)",
+      "Bash(build-env/arm64/build_release.sh:*)",
+      "Bash(build-env/play.sh:*)",
+      "Bash(build-env/play-xr.sh:*)",
+      "Bash(build-env/monado.sh:*)",
+      "Bash(build-env/pace-stats.sh:*)",
+      "Bash(roomrun/build.sh:*)",
+      "Bash(roomrun/run.sh:*)",
+      "Bash(./build.sh:*)",
+      "Bash(./run.sh:*)",
+      "Bash(docker build:*)",
+      "Bash(docker run:*)",
+      "Bash(docker image inspect:*)",
+      "Bash(docker images:*)",
+      "Bash(docker ps:*)",
+      "Bash(steam-run:*)",
+      "Bash(nix build:*)",
+      "Bash(nix shell:*)",
+      "Bash(niri msg outputs:*)",
+      "Bash(niri msg windows:*)",
+      "Bash(niri msg focused-output:*)",
+      "Bash(sha256sum:*)",
+      "Bash(uptime:*)",
+      "Bash(git -C external/OpenSA2 status:*)",
+      "Bash(git -C external/OpenSA2 diff:*)",
+      "Bash(git -C external/OpenSA2 log:*)"
+    ],
+    "deny": [
+      "Bash(niri msg action:*)"
+    ],
+    "ask": [
+      "Bash(build-env/arm64/frame_deploy.sh:*)",
+      "Bash(ssh:*)",
+      "Bash(scp:*)",
+      "Bash(rsync:*)"
+    ]
+  }
+}
