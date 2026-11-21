@@ -84,6 +84,15 @@ Read `external/OpenSA2/host/xr/README.md` first. It holds the measured camera fi
   - To relocate one, multiply its MV by `V·R·V⁻¹` in view space.
 - **Pacing:** an XR thread runs at the runtime rate and the player thread at the game rate, with hand-over of the newest frame and pose. One **recursive** `queue_lock()` guards SDL's single queue, because Monado's `xrAcquireSwapchainImage` submits through our wrapper. The remaining dips come from CPU cost: about 3200 doubled draws in heavy sections. Fix that with instanced or multiview stereo.
 
+- **2D window, Sonic out, first person (`vr-sonic`, 2026-11-21).** README "2D window, Sonic out of the window, first person".
+  - **Window:** draws into the back buffer are redirected unedited into the HUD's texture, which becomes an opaque quad, under the projection layer by default. The eyes hold only the gloves and Sonic.
+  - **Tests:** `SA2_XR_WINDOW=1` starts in the window. Window test-hand frames: `h` head, `n` window centre, `w` Sonic's spot on the window, `s` Sonic in the room. `SA2_XR_TEST_PAD` takes several `MASK:FROM:TO` steps.
+  - **Eye dumps:** `_window.png` composites the quad.
+  - **Pause-menu timing:** steps fail when the game runs slower than real time, because shots slow it. Leave at least 3 s between menu steps, or use `SA2_XR_WINDOW=1`.
+  - **Held Sonic's facing:** `SA2_XR_SONIC_FACE_OFF` is 180, measured. Judge from the side and the front.
+  - **Don't hold the game camera far from Sonic** while his draws are relocated: his weighted legs stretch. The camera follows him onto the proxy floor.
+  - **Script:** the scratchpad's `run_vs.sh` and `grab_w.sh`, under `monado_null.sh`, a private x9 Monado. Never `pkill monado-service`: the user's own Monado may be running.
+
 ## Frame performance (measured 2026-11-21)
 - Seated VR with about 1,090 world draws: 59.9 fps.
 - With `vr-level-culling` (radius 3000, about 1,780 world draws, so about 3,560 GPU draws after per-eye doubling): about 49–52 fps. Temperature is 75 °C, so it is CPU per-draw cost, not thermal.

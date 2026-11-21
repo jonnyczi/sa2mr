@@ -364,3 +364,19 @@ See `host/xr/README.md`, "Game-side performance". Live x86, City Escape: stream 
   - `test_s5_stream.py` 277 passed; 14 fail on the build container's missing `zstd` binary, which is environmental.
   - Recorder object check OK; flat `SA2_SELFTEST_OK` (menu at tick 3582).
   - A deduplicated stream replays pixel-identical.
+
+## 2D window, Sonic out of the window, first person (2026-11-21)
+
+See `host/xr/README.md`, "2D window, Sonic out of the window, first person", and `docs/vr-game-hooks.md` section 7.
+- **New tweak `vr-sonic`** (`runtime/tweaks/vr-sonic.c`; wraps `sub_717840` Sonic_Main and `sub_4ec770` CameraUpdateLocation). The VR release's `game.env` turns it on through `host/xr/build.sh`. **The Frame keeps its own `share/game.env`**, so add `vr-sonic` to `SA2_TWEAKS` there by hand.
+- **Upstream edits** (added lines only; each is unchanged with vr-sonic off):
+  - `runtime/tweaks/fast-stage-load.c`: its wrap of `0x0043A780` hands the call to `sa2_vr_sonic_pause` first.
+  - `runtime/tweaks/hide-upgrade-models.c`: its wrap of `0x00720090` (Sonic_Display) hands the call to `sa2_vr_sonic_display` first.
+  - `runtime/sa2_tweaks.h`, `GameSettings.java` ("Story and presentation" group) and `docs/downloads.md`: the tweak's lines.
+  - `host/sa2_stream.h`: `SA2S_MARK_SONIC` 4.
+  - `host/sa2_vr_hands.h`: version 7.
+- **Our files:** `host/xr/xr_gpu.cpp` (the window, Sonic, the vignette), `xr_gloves.{h,cpp}` (the vignette ring), `host/xr/build.sh` (vr-sonic in the VR `game.env`).
+- **Checks:**
+  - `test_tweaks` 137 passed; `test_stream` 147; `TEST_D3D9GPU_OK` 5445; flat `SA2_SELFTEST_OK` (offscreen, menu at tick 3584); public check 0 failures.
+  - Offscreen XR runs under the private null-compositor Monado: `media/xr-test/pause1`, `pause2`, `chaopause3`, `run1`, `winmove1`, `winkeep`, `fpfwd`, `fpdown`, `fpvig`; key pictures `media/vr_*` of 2026-11-21.
+- **Test scripts** (scratchpad): `run_vs.sh` (a stage or the garden under x9 Monado with the Frame-mimic layer, game.env swapped for the run only), `grab_w.sh` (the window grab test), `monado_null.sh` (a private null-compositor Monado that never touches the user's).

@@ -159,10 +159,12 @@ No SA2/SADX VR or MR mod exists. This would be the first.
      - better fist closing.
   2. **VR performance: single-pass stereo** (now in progress).
   3. **2D mode:** a floating game window, moved and resized with the grips, toggled with VR mode from the **pause menu**. Reach into the window and pull Sonic out into the room (mario64mr-style), in his falling animation while held.
+     - **Built 2026-11-21 (`vr-sonic`), verified offscreen only:** pause items VR / 2D VIEW and FIRST PERSON; the window; take Sonic, hold him, drop him on a proxy floor (DynCol_Add, verified) where he runs under the pad with head-relative steering; take him again and drop him back into his level. Needs the headset: feel, layer order, reprojection, and the play area's size.
      - **User decision:** once dropped, Sonic **runs around the room under the player's control**, like Mario in mario64mr, not frozen.
      - This needs proxy room collision in the game (`DynCol_Add` 0x0047D6B0, untested), which is shared groundwork with Room Run.
      - Hooks are in `external/OpenSA2/docs/vr-game-hooks.md`.
   4. **First-person VR mode**, where looking down shows Sonic's body and feet, for the sense of speed.
+     - **Built 2026-11-21** (FIRST PERSON in the pause menu, or `SA2_XR_FIRST_PERSON=1`): the eye at his feet + 7 units, level, head hidden, with a speed vignette. Comfort is untested on the headset.
   5. Then **Room Run**: generate a level in the player's room.
   - Chao in Your Room v1 is finicky, and Chao can't be placed far. Improve later.
 
