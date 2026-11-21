@@ -134,6 +134,35 @@ Read `external/OpenSA2/host/xr/README.md` first. It holds the measured camera fi
 
 - **Room Run round 2 (2026-11-21).** README "Room Run, round 2". No grind assist; throws (`sonic_cmd_vel`, channel version 11; `SA2_XR_THROW_*`), held Sonic turns with the hand (`SA2_XR_SONIC_HOLD_TURN`), the course drawn only while `course_shown` (put-back, restart, menus and view changes take it away; a view change puts Sonic back). Test: scratchpad `rr2.sh` (the Frame's 2 × 2 m case; `HANDS` steps `time@hand:frame:x,y,z:grip`, `TURN`, `STICKS`, `PAD`). Pause-menu masks: Start 0x0010, Down 0x0002, Up 0x0001, A 0x1000, Left 0x0004 (Up from the top is EXIT).
 
+- **Walk-through window (portal) (2026-11-21).** README "Walk-through window (portal)". In the stages, the VR / 2D
+  VIEW window is the portal by default (`SA2_XR_WINDOW_PORTAL=0`: the mono window; the garden keeps the mono one).
+  - **The model:** seated, anchored at the sweet spot `A = W T(0,0,D)`, `D = w/2 · P00`; `X_e = S(1/s) E_e⁻¹ A S(s)`. The
+    scale is auto `(D + 0.2) / 60`, and Sonic out of the window uses the same `s`.
+  - **The glove pass's V must map room metres to game units:** divide the whole 3×4 by `s`, not only the translation.
+    Dividing only the translation put the portal's quads at nonsense clip coordinates, and the frame and HUD
+    vanished.
+  - **Planes:** two-pass uses `set_clip_planes(…, 5)`. Single-pass uses stereo-block rows 6–10, added to clip distances
+    0–4 in left-eye clip space (`P0^-T M0^T p`). Two-pass and single-pass agree to at most 2 pixels.
+  - **`SA2_XR_PORTAL_GLASS=open` is the default:** the strict glass plane cut the street under the camera
+    (everything within `D/s` ≈ 42 units).
+  - **Inside:** a stencil hole (our own bit; the game clears the stencil but never tests it). Room meshes go through
+    the hole only; Sonic is hidden inside (v1).
+  - **Crossing:** a logical state with a band (for input) and an exact one (for drawing). Use one side convention,
+    z ≥ 0 = front: strict signs flapped at z = 0.
+  - **Throws and jumps into the window:** `throw_into_window` / `flight_into_window` simulate the flight while
+    ignoring the proxy floor's walls, and `drop_into_window` shares the put-back.
+  - **Tests:**
+    - offline: a replayed stream with `SA2_XR_WINDOW=1` and no runtime (synthetic eyes at `SA2_XR_PORTAL_HEAD`/`_PATH`);
+    - live: the scratchpad's `pt.sh` / `portal_vs.sh`;
+    - test-hand frame `g`; `_portal.png` dumps.
+    - **The time-based head paths race the unpaced replay:** compare static poses only.
+  - **Another agent may be running `sa2-game`** (benchmarks): `portal_vs.sh`'s cleanup only kills processes with
+    this run's `XDG_CONFIG_HOME` and the XR release path.
+  - **Pause-menu tests need two Downs to reach VR / 2D VIEW** (Continue, Restart, then the item); one Down lands on
+    Restart.
+  - **Room Run objects are the game's size** (SET scale is behaviour; KASOKU's collision is a fixed 10 × 4.44 units). On
+    the toy course they overhang, and whether to shrink them is the user's call.
+
 ## Frame performance (measured 2026-11-21)
 - Seated VR with about 1,090 world draws: 59.9 fps.
 - With `vr-level-culling` (radius 3000, about 1,780 world draws, so about 3,560 GPU draws after per-eye doubling): about 49–52 fps. Temperature is 75 °C, so it is CPU per-draw cost, not thermal.

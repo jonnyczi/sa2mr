@@ -149,6 +149,16 @@ No SA2/SADX VR or MR mod exists. This would be the first.
 
 ### Pillar D: Classic SA2 stages in VR (supporting)
 - **Portal window** on the wall: play the real stages through it, and lean in to be inside.
+  - **Built (2026-11-21), offscreen-verified, not yet on the Frame:** the VR / 2D VIEW window in the stages is
+    now the walk-through window (`host/xr/README.md`, "Walk-through window (portal)").
+    - Stereo and parallax through the glass, which matches the flat frame from the sweet spot.
+    - Put your head through it: the level all round, your room through a hole behind you.
+    - Reach through the glass to take Sonic out in 3D.
+    - Toy scale stays the same inside, through the window and in the room (0.0152 m a unit for a 1.2 m
+      window: Sonic 15 cm).
+    - Throwing Sonic at the window, or jumping into it from the course, takes him back into the level.
+  - **Open:** the user's verdict on the toy-sized inside, on the back view, and on `open` against `cut`
+    glass. Sonic is hidden while your head is inside (v1).
 - **Moving diorama:** a table-sized slice of the stage that scrolls with Sonic, the only honest tabletop for linear stages.
 - **Comfort ladder:** diorama (default), then chase cam, then opt-in first-person (vignette, fixed horizon, no camera roll, grid cage). Marketing line: "the camera complaint is solved — *you* are the camera."
 - **User roadmap (2026-11-21), in order:**

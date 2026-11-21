@@ -475,3 +475,28 @@ See `host/xr/README.md`, "Room Run, round 2", and `docs/vr-roomrun-objects.md` s
 - **Root repo:** `roomrun/src/objects.cpp`, `roomrun/include/roomrun/objects.hpp` (variety, enemies, rails, `grindRailGroup`), `roomrun/src/assembler.cpp` and `roomrun/include/roomrun/params.hpp` (a rail-share cost, off), `roomrun/tests/test_main.cpp`, `roomrun/tools/roomrun_batch.cpp` (`--variety`), `roomrun/examples/batch_1000.txt`, new `roomrun/examples/variety_500.txt`.
 - **OpenSA2 files:** `runtime/tweaks/vr-sonic.c` (no assist, throws, hand yaw, view-change put-back, `course_shown`), `host/sa2_vr_hands.h` (version 11), `host/xr/xr_gpu.cpp`, `host/xr/xr_roomrun.cpp`, `host/xr/README.md`, `docs/vr-roomrun-objects.md`. No other upstream file.
 - **Checks:** roomrun tests (16345 checks); 1000-room batch: generation unchanged, objects line changed (more grind rails, springs now include hop springs); test_tweaks 137; test_stream 147; public check 0 failures; flat `SA2_SELFTEST_OK` (menu at tick 3580); `RELEASE_BUILD_OK`, `XR_BUILD_OK`.
+
+## Walk-through window (portal), throws and jumps into the window, objects' size (2026-11-21)
+
+See `host/xr/README.md`, "Walk-through window (portal)".
+
+- **What:** the VR / 2D VIEW window in the stages is a portal into the level:
+  - stereo through the glass, with five clip planes per eye (two-pass as D3D9 planes; single-pass in the
+    stereo block's new rows);
+  - the head can go inside: the world all round, the room through a stencil hole;
+  - the reach-in grab of Sonic in 3D;
+  - throws and jumps into the window from the room (`frame-rrobj2`).
+  The objects' size was investigated, and no change was made: they are the game's size, and their collision
+  is the game's fixed shape.
+- **OpenSA2 files:**
+  - new: `host/xr/xr_portal.{h,cpp}`, `host/xr/shaders/portal.{vert,frag}`;
+  - changed: `host/xr/xr_gpu.cpp`, `host/xr/xr_gloves.{h,cpp}`, `host/xr/xr_stereo.{h,cpp}`,
+    `host/xr/shaders/glove.{vert,frag}`, `host/xr/shaders/gen_spv.sh`, `host/xr/xr_glove_spv.h`,
+    `host/xr/build.sh`, `host/xr/README.md`.
+  - No upstream file: everything is under `host/xr`.
+- **Checks:** `XR_BUILD_OK` against roomrun 0.2.0; the patched vertex modules pass `spirv-val` (vulkan1.3);
+  `TEST_D3D9GPU_OK` 5445; `test_stream` 147; `test_tweaks` 137; flat `SA2_SELFTEST_OK` (offscreen); public
+  check 0 failures.
+- **Build note:** while another agent was mid-edit, `roomrun/src/generator.cpp` did not compile for a while.
+  The XR build can take a snapshot instead with `SA2_ROOMRUN=/work/<dir>` (e.g. a `git archive HEAD roomrun`
+  under `private/`).
