@@ -364,6 +364,11 @@ See `host/xr/README.md`, "Game-side performance". Live x86, City Escape: stream 
   - `test_s5_stream.py` 277 passed; 14 fail on the build container's missing `zstd` binary, which is environmental.
   - Recorder object check OK; flat `SA2_SELFTEST_OK` (menu at tick 3582).
   - A deduplicated stream replays pixel-identical.
+- **Frame profile (2026-11-21, `frame-perf3`, City Escape replay with no player):**
+  - The game's CPU time per frame in the heavy part is 12.7–13.0 ms with default scheduling and **10.0 ms pinned to cpu7**, the one Cortex-X4 core and the fastest (`SA2_GUEST_HOST_CPUS=7`).
+  - It is 12.6 ms on cpu4 (A720) and 49 ms on cpu0 (A520).
+  - memfast gives no gain. The CRI reverb is 13.6% of the game's CPU there.
+  - All replays matched. The ranked proposals are in the performance agent's report: the window cone, `-mcpu`, D3D9 dispatch, the recorder, the reverb and the code layout.
 
 ## 2D window, Sonic out of the window, first person (2026-11-21)
 

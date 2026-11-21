@@ -68,5 +68,6 @@ build-env/arm64/frame_deploy.sh log | fetch DIR | stop
   - Passthrough is grayscale (`ALPHA_BLEND`).
   - Controller profile `valve/frame_controller_valve` (bumper/shoulder name variants).
   - No hand tracking, no scene mesh.
+  - **CPU (profiled 2026-11-21, City Escape replay, heavy part):** cpu0-1 Cortex-A520 (2.27 GHz), cpu2-4 A720 (3.15 GHz), cpu5-6 A720 (2.96 GHz), **cpu7 X4 (3.05 GHz, capacity 1024) = the fastest core**. The game's CPU time per frame: default scheduling 12.7-13.0 ms, pinned to cpu4 12.6 ms, **pinned to cpu7 10.0 ms (-22%)**, pinned to cpu0 49 ms. A memfast build made no difference. The CRI reverb (`__wrap_sub_843460`) is 13.6% of the game's CPU on the Frame. Pin with `SA2_GUEST_HOST_CPUS=7` in `game.env`. The suite kit is in the scratchpad `frameprof/`, and results in `frame-perf3/`.
 
 Record anything new you learn about the Frame in `BUILD_NOTES.md` (ARM64 section) and in this skill.
