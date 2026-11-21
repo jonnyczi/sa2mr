@@ -164,6 +164,8 @@ No SA2/SADX VR or MR mod exists. This would be the first.
      - This needs proxy room collision in the game (`DynCol_Add` 0x0047D6B0, untested), which is shared groundwork with Room Run.
      - Hooks are in `external/OpenSA2/docs/vr-game-hooks.md`.
   4. **First-person VR mode**, where looking down shows Sonic's body and feet, for the sense of speed.
+     - Built and Frame-tested. The user called it "pretty good" (2026-11-21).
+     - **Parked for polish after the next round of performance tuning.**
      - **Built 2026-11-21** (FIRST PERSON in the pause menu, or `SA2_XR_FIRST_PERSON=1`): the eye at his feet + 7 units, level, head hidden, with a speed vignette. Comfort is untested on the headset.
   5. Then **Room Run**: generate a level in the player's room.
      - **Built 2026-11-21 (v0), verified offscreen only** (`host/xr/README.md` "Room Run v0"): with `SA2_VR_ROOM_RUN=1` in game.env, Sonic pulled out of the window and let go lands on a generated course instead of the flat floor. The course fits the STAGE play-area rectangle (else a 3.0 × 2.5 m rectangle around the user), is drawn in the room with our own toy meshes (orange road, striped curbs, rail strips, a checkered start, pillars), and is real game collision (DynCol pieces). Stick-up runs along the course. Offscreen: 4.4 laps, no falls, up and down its ramps.
