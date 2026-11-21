@@ -392,3 +392,24 @@ See `host/xr/README.md`, "Room Run v0", and `docs/vr-game-hooks.md` section 8.
 - **Verified offscreen** (`media/xr-test/rr1`–`rr3`, `media/roomrun_v0_*`): the course drawn in the room; Sonic dropped on it ran 4.4 laps under the scripted stick with track steering, 0 respawns, on the deck within ±1.2 units, up from 0.81 m to 1.28 m and down.
 - **Test script** (scratchpad): `rr_w.sh` (the window grab test with `SA2_VR_ROOM_RUN=1`, the stick along the course).
 - **arm64:** `release_build_arm64.py --only game,players,launch,assemble,package`: `RELEASE_BUILD_ARM64_OK`, the generator compiled into `sa2_player_xr` (xr-build.log "== roomrun (/roomrun)"), tarball sha256 `44ef13bc…`. Not deployed. **Frame `share/game.env`:** add `SA2_VR_ROOM_RUN=1` (keep `vr-sonic` in `SA2_TWEAKS`); no new tweak name.
+
+## Frame feedback on the modes (2026-11-21, `frame-modes1`)
+
+See `host/xr/README.md`, "Fixes from the Frame's first test of these modes", and `docs/vr-game-hooks.md` section 9.
+
+- **Stick:**
+  - The seated view recentres on a mode change.
+  - The stick is turned only in play (GameState 16 via `game_state`).
+  - First person writes the camera angle word E4 (the stick's heading). Its view eases toward the motion, it has snap turns, and the eye is at the head node.
+- **Vignette:** off by default.
+- **2D window:** drawn into the eyes at the far plane (`SA2_XR_WINDOW_LAYER=eyes`, new `shaders/window.{vert,frag}`), so the gloves and Sonic stay over it. The drop-back zone is 4 cm.
+- **Restart:** vr-sonic resets on any GameState other than 7, 16 or 17 and takes its stale collision pieces out. A Restart keeps the task address and the dynamic collision list.
+- **Room Run:** at least 2 × 2 m about a small play area, with a 0.3 m free circle.
+- **Files:**
+  - `host/sa2_vr_hands.h` version 9
+  - `runtime/tweaks/vr-sonic.c`
+  - `host/xr/xr_gpu.cpp`, `xr_gloves.{h,cpp}`, `xr_roomrun.cpp`, `xr_glove_spv.h`
+  - `shaders/gen_spv.sh`, `shaders/window.{vert,frag}`
+  - `host/xr/README.md`, `docs/vr-game-hooks.md`
+  - No other upstream file.
+- **Checks:** test_tweaks 137 passed; public check 0 failures; flat `SA2_SELFTEST_OK` (menu at tick 3578). d3d9gpu and the player are not touched in this step.

@@ -100,6 +100,16 @@ Read `external/OpenSA2/host/xr/README.md` first. It holds the measured camera fi
 
 - **Teardown order (2026-11-21).** Release every SDL object the XR player owns (`gloves_.release()`) before `delete in_` in `~XrGpu`; members are destroyed after the body, into a freed SDL device. That was the Frame's "crash on pause" (`malloc(): unsorted double linked list corrupted`): the game had ended, and the player died in teardown after writing a complete report. ASan misses it (the bad writes are inside uninstrumented SDL), and test scripts that kill the session never reach teardown. Test exits with `run_end.sh` (scratchpad: `ENDGAME_AT=N` sends SIGTERM to `sa2-game`) and read `"player": {"exit": ...}` in `launch.runrec`: it must be 0.
 
+- **Frame mode fixes (2026-11-21).**
+  - **The stick:** the game turns it by the camera location's angle word **E4** (`0x01DD00E4`, = atan2(dir) + 180°). A camera that writes only the position and direction mis-steers.
+  - **Remaps only in play:** remap the stick only in play (`game_state` 16), never in menus.
+  - **Recentre on mode changes:** the seated view's forward is the reference.
+  - **Window default `eyes`:** SteamVR put the window's quad over the projection layer whatever the order.
+  - **Restart:** it **reuses the player task's address** and keeps the dynamic collision list. Reset on GameState, not on the task.
+  - **Test tools:** `SA2_XR_TEST_STICKS`, `SA2_XR_TEST_HEAD_FROM` (a head turn after the recentre), `SA2_XR_TEST_STAGE_BOUNDS`, `SA2_VR_POS_LOG`.
+  - **Scratchpad scripts:** `restart_test.sh` (toggles, Restart, stick).
+  - **Open ground for path tests:** Metal Harbor (`STAGE=10`); City Escape's board section weaves by itself.
+
 ## Frame performance (measured 2026-11-21)
 - Seated VR with about 1,090 world draws: 59.9 fps.
 - With `vr-level-culling` (radius 3000, about 1,780 world draws, so about 3,560 GPU draws after per-eye doubling): about 49–52 fps. Temperature is 75 °C, so it is CPU per-draw cost, not thermal.
