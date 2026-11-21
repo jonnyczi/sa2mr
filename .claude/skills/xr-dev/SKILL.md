@@ -89,6 +89,11 @@ Read `external/OpenSA2/host/xr/README.md` first. It holds the measured camera fi
 - With `vr-level-culling` (radius 3000, about 1,780 world draws, so about 3,560 GPU draws after per-eye doubling): about 49–52 fps. Temperature is 75 °C, so it is CPU per-draw cost, not thermal.
 - **Single-pass stereo (built 2026-11-21, the default `SA2_XR_STEREO=single`):** one two-instance draw per world draw, a SPIR-V epilogue picking the eye (`xr_stereo.cpp`, README "Single-pass stereo"). x86 replay of City Escape: −37% frame time in the heavy part, eyes match two-pass to ≤ 8 pixels beyond 2/255. Not yet measured on the Frame. Don't lower `SA2_VR_CULL_RADIUS` as a workaround unless asked.
 
+## Frame performance after single-pass stereo and game-side dedupe (2026-11-21)
+- City Escape, seated, with vr-level-culling, played to the end: **mostly 56–60 fps**, with lows of 53 (it was 42–55).
+- The user says it is "much better", and deferred further performance work.
+- Remaining costs: the translated code's memory helpers and the audio DSP, both in the core translation.
+
 ## Open problems (update this list when they change)
 - **Level culling.** On PC the visible level is the GC land system, not `ListGroundForDrawing` (whose list is empty: `VisibleModelCount` 0 after the split at `0x4929D0`).
   - The GC land draw is at `0x4941C0`. It drops geometry through the sphere test `0x4926D0` (called from return address `0x4942A6`) and the clip distance.
