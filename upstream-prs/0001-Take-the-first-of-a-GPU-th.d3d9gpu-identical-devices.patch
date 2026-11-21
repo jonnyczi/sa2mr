@@ -1,0 +1,247 @@
+From 56bdc9964240f5fb9806980acba7c82e4356382d Mon Sep 17 00:00:00 2001
+From: jonnyczi <czijonny@gmail.com>
+Date: Sat, 21 Nov 2026 12:27:32 +0800
+Subject: [PATCH] Take the first of a GPU the Vulkan loader lists twice
+
+query_device_facts and query_vulkan_device find SDL_gpu's device by name and
+require exactly one match. When two ICD manifests load the same driver, as a
+container's copy of Mesa beside the host's does, the loader lists the GPU twice,
+the facts query finds two devices of that name, and Direct3DCreate9 refuses.
+
+Devices of one name that have the same deviceUUID, driverUUID, vendor, device
+ID and driver version are now taken as one device, and the first is read;
+query_vulkan_device asks one_device_named, on the facts query's throwaway
+instance. Devices of one name that differ in any of these are still refused by
+name. The stub loader in test_d3d9gpu now fills VkPhysicalDeviceIDProperties,
+and the new test covers the copies, devices that differ in deviceUUID,
+driverUUID or driver version, a device UUID of zeros, and three devices of
+one name.
+---
+ host/d3d9gpu/d9g_gpu_sdl.cpp       |  6 ++++
+ host/d3d9gpu/d9g_shader_profile.h  |  4 +++
+ host/d3d9gpu/d9g_shader_vulkan.cpp | 46 ++++++++++++++++++++++--
+ host/d3d9gpu/test/test_d3d9gpu.cpp | 57 +++++++++++++++++++++++++++++-
+ 4 files changed, 110 insertions(+), 3 deletions(-)
+
+diff --git a/host/d3d9gpu/d9g_gpu_sdl.cpp b/host/d3d9gpu/d9g_gpu_sdl.cpp
+index 68e7fd2..18ce2b6 100644
+--- a/host/d3d9gpu/d9g_gpu_sdl.cpp
++++ b/host/d3d9gpu/d9g_gpu_sdl.cpp
+@@ -1569,6 +1569,12 @@ void query_vulkan_device(SdlGpu* gpu) {
+                 info.vk_device_type = uint32_t(p.deviceType);
+             }
+             if (matches == 1) { info.vk_query_ok = true; info.vk_query = "vkGetPhysicalDeviceProperties"; }
++            else if (matches > 1 && shader::one_device_named(reinterpret_cast<void*>(gipa), info.device_name)) {
++                // one device and driver the loader lists twice (two ICD manifests): the first's properties
++                info.vk_query_ok = true;
++                info.vk_query = "vkGetPhysicalDeviceProperties, the first of " + std::to_string(matches) +
++                                " physical devices that are one device and driver";
++            }
+             else info.vk_query = std::to_string(matches) + " physical devices named " + info.device_name;
+         }
+     } else {
+diff --git a/host/d3d9gpu/d9g_shader_profile.h b/host/d3d9gpu/d9g_shader_profile.h
+index c9c5a9e..29a7611 100644
+--- a/host/d3d9gpu/d9g_shader_profile.h
++++ b/host/d3d9gpu/d9g_shader_profile.h
+@@ -162,6 +162,10 @@ struct DeviceFactsQuery {
+   DeviceFacts facts;
+ };
+ DeviceFactsQuery query_device_facts(void* gipa, const std::string& device_name, ApiLevel cap = ApiLevel::vk13);
++// Whether two or more physical devices are named `device_name` and all are one device and driver listed
++// again (the same deviceUUID, driverUUID and driverVersion), read on a throwaway instance through `gipa`
++// as query_device_facts reads; query_device_facts takes the first of them, and so may the caller.
++bool one_device_named(void* gipa, const std::string& device_name);
+ // The facts as d3d9gpu_shaderc's facts file (schema sa2-d3d9gpu-shader-facts/v1).
+ std::string facts_json(const DeviceFactsQuery& q);
+ 
+diff --git a/host/d3d9gpu/d9g_shader_vulkan.cpp b/host/d3d9gpu/d9g_shader_vulkan.cpp
+index 9eaf195..a098496 100644
+--- a/host/d3d9gpu/d9g_shader_vulkan.cpp
++++ b/host/d3d9gpu/d9g_shader_vulkan.cpp
+@@ -11,6 +11,7 @@
+ 
+ #include <algorithm>
+ #include <cstdio>
++#include <cstring>
+ #include <set>
+ #include <sstream>
+ #include <utility>
+@@ -166,6 +167,24 @@ std::set<std::string> device_extensions(PFN_vkEnumerateDeviceExtensionProperties
+   for (auto& e : ev) es.insert(e.extensionName);
+   return es;
+ }
++
++// Whether `a` and `b` are one device on one driver that the loader lists twice: two ICD manifests that
++// load the same driver (a container's copy of Mesa beside the host's) give two physical devices with the
++// same deviceUUID and driverUUID (VkPhysicalDeviceIDProperties, core in 1.1), vendor, device ID and
++// driver version. Every fact the queries read is then the same whichever of them SDL_gpu chose. A device
++// UUID of zeros identifies nothing, so it is never the same.
++bool same_device(PFN_vkGetPhysicalDeviceProperties2 props, VkPhysicalDevice a, VkPhysicalDevice b) {
++  VkPhysicalDeviceIDProperties ida{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES};
++  VkPhysicalDeviceIDProperties idb{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES};
++  VkPhysicalDeviceProperties2 pa{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, &ida};
++  VkPhysicalDeviceProperties2 pb{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, &idb};
++  props(a, &pa);
++  props(b, &pb);
++  static const uint8_t zeros[VK_UUID_SIZE] = {};
++  return std::memcmp(ida.deviceUUID, zeros, VK_UUID_SIZE) && !std::memcmp(ida.deviceUUID, idb.deviceUUID, VK_UUID_SIZE) &&
++         !std::memcmp(ida.driverUUID, idb.driverUUID, VK_UUID_SIZE) && pa.properties.vendorID == pb.properties.vendorID &&
++         pa.properties.deviceID == pb.properties.deviceID && pa.properties.driverVersion == pb.properties.driverVersion;
++}
+ }  // namespace
+ 
+ // The structures VulkanFeatures owns, chained as SDL_GPUVulkanOptions takes them: feature_list is
+@@ -327,7 +346,7 @@ DeviceFactsQuery query_device_facts(void* gipa_ptr, const std::string& device_na
+   if (props && feats && fmtprops && exts) devs = t.devices();
+   VkPhysicalDevice d = VK_NULL_HANDLE;
+   uint32_t api = 0;
+-  int matches = 0;
++  int matches = 0, copies = 0;   // copies: later matches that are the first one listed again (same_device)
+   for (VkPhysicalDevice pd : devs) {
+     VkPhysicalDeviceProperties2 p{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+     props(pd, &p);
+@@ -335,9 +354,11 @@ DeviceFactsQuery query_device_facts(void* gipa_ptr, const std::string& device_na
+     if (!matches++) {
+       d = pd;
+       api = p.properties.apiVersion;
++    } else if (same_device(props, d, pd)) {
++      copies++;
+     }
+   }
+-  if (matches != 1) {
++  if (matches - copies != 1) {
+     q.how = device_name.empty() ? std::to_string(devs.size()) + " devices: the query needs exactly one (VK_DRIVER_FILES)"
+                                 : std::to_string(matches) + " physical devices named " + device_name;
+     return q;
+@@ -468,10 +489,31 @@ DeviceFactsQuery query_device_facts(void* gipa_ptr, const std::string& device_na
+   o.descriptor_heap = hasHeap && fheap.descriptorHeap;
+   o.clip_distance = f.features.shaderClipDistance;
+   q.device_name = p.properties.deviceName;
++  if (copies)
++    q.how += "; the first of " + std::to_string(matches) + " physical devices that are one device and driver "
++             "(the same deviceUUID, driverUUID and driverVersion)";
+   q.ok = true;
+   return q;
+ }
+ 
++bool one_device_named(void* gipa_ptr, const std::string& device_name) {
++  auto gipa = reinterpret_cast<PFN_vkGetInstanceProcAddr>(gipa_ptr);
++  if (!gipa) return false;
++  Throwaway t(gipa);
++  auto props = t.inst ? t.fn<PFN_vkGetPhysicalDeviceProperties2>("vkGetPhysicalDeviceProperties2") : nullptr;
++  if (!props) return false;
++  VkPhysicalDevice first = VK_NULL_HANDLE;
++  int matches = 0;
++  for (VkPhysicalDevice pd : t.devices()) {
++    VkPhysicalDeviceProperties2 p{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
++    props(pd, &p);
++    if (device_name != p.properties.deviceName) continue;
++    if (!matches++) first = pd;
++    else if (!same_device(props, first, pd)) return false;
++  }
++  return matches > 1;
++}
++
+ std::string facts_json(const DeviceFactsQuery& q) {
+   const DeviceFacts& f = q.facts;
+   auto b3 = [](const bool* v) {
+diff --git a/host/d3d9gpu/test/test_d3d9gpu.cpp b/host/d3d9gpu/test/test_d3d9gpu.cpp
+index 625e6eb..a1e3c3f 100644
+--- a/host/d3d9gpu/test/test_d3d9gpu.cpp
++++ b/host/d3d9gpu/test/test_d3d9gpu.cpp
+@@ -2621,6 +2621,9 @@ struct Dev {
+     // fills every structure it knows whatever its own version, as Mesa's common vk_get_physical_device_features
+     // fills every core structure: SDL_gpu then accepts it at 1.3, comparing no version
+     bool fills_above = false;
++    // VkPhysicalDeviceIDProperties' deviceUUID and driverUUID, every byte this value (0: zeros), and the driver version
++    uint8_t device_uuid = 0, driver_uuid = 0;
++    uint32_t driver_version = VK_MAKE_API_VERSION(0, 512, 0, 0);
+ };
+ struct World {
+     uint32_t loader = VK_API_VERSION_1_3;   // 0: a 1.0 loader, without vkEnumerateInstanceVersion
+@@ -2667,7 +2670,7 @@ VkResult VKAPI_CALL enumerate_devices(VkInstance, uint32_t* n, VkPhysicalDevice*
+ void props_of(const Dev& d, VkPhysicalDeviceProperties& p) {
+     p = VkPhysicalDeviceProperties{};
+     p.apiVersion = d.api;
+-    p.driverVersion = VK_MAKE_API_VERSION(0, 512, 0, 0);
++    p.driverVersion = d.driver_version;
+     p.vendorID = 0x5143;
+     p.deviceType = d.type;
+     std::snprintf(p.deviceName, sizeof p.deviceName, "%s", d.name.c_str());
+@@ -2691,6 +2694,11 @@ void VKAPI_CALL get_props2(VkPhysicalDevice pd, VkPhysicalDeviceProperties2* p)
+             p12->roundingModeIndependence = VK_SHADER_FLOAT_CONTROLS_INDEPENDENCE_ALL;
+             p12->denormBehaviorIndependence = VK_SHADER_FLOAT_CONTROLS_INDEPENDENCE_ALL;
+         }
++        if (s->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES) {   // core in 1.1
++            auto* id = reinterpret_cast<VkPhysicalDeviceIDProperties*>(s);
++            std::memset(id->deviceUUID, d.device_uuid, VK_UUID_SIZE);
++            std::memset(id->driverUUID, d.driver_uuid, VK_UUID_SIZE);
++        }
+         if (s->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES && has(d, "VK_KHR_driver_properties")) {
+             auto* drv = reinterpret_cast<VkPhysicalDeviceDriverProperties*>(s);
+             drv->driverID = VkDriverId(d.driver_id);
+@@ -3013,6 +3021,52 @@ void test_vk11_detection() {
+     CHECK(next_device_request(full, DeviceAnswer::accepted_cpu, 0, l.lacks, l.fits).kind == DeviceStep::done);
+ }
+ 
++// (f2) One GPU the loader lists twice, as two ICD manifests that load one driver give it (a container's copy
++// of Mesa beside the host's): the same name, deviceUUID, driverUUID and driver version. query_device_facts
++// reads the first and says so, and one_device_named (query_vulkan_device's answer to the same question)
++// holds; two devices of one name that differ in any of them are still refused, by name.
++void test_one_device_listed_twice() {
++    using namespace d9g::shader;
++    const std::string name = "Stub RADV";
++    auto copy = [&](uint8_t device_uuid, uint8_t driver_uuid) {
++        stubvk::Dev d = stubvk::device(name, 1, 3, 250, VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU, {}, 3);
++        d.device_uuid = device_uuid;
++        d.driver_uuid = driver_uuid;
++        return d;
++    };
++    stubvk::reset({copy(7, 9)});
++    const DeviceFactsQuery one = query_device_facts(stubvk::loader(), name, ApiLevel::vk13);
++    CHECK(one.ok && !one_device_named(stubvk::loader(), name));
++    // listed twice, with a CPU device of another name between the copies
++    stubvk::reset({copy(7, 9), stubvk::device("llvmpipe stub", 1, 3, 255, VK_PHYSICAL_DEVICE_TYPE_CPU), copy(7, 9)});
++    DeviceFactsQuery q = query_device_facts(stubvk::loader(), name, ApiLevel::vk13);
++    CHECK(q.ok && facts_json(q) == facts_json(one) && q.device_name == name);
++    CHECK(q.how == one.how + "; the first of 2 physical devices that are one device and driver (the same deviceUUID, "
++                             "driverUUID and driverVersion)");
++    CHECK(one_device_named(stubvk::loader(), name) && !one_device_named(stubvk::loader(), "llvmpipe stub"));
++    // another driver build for the same GPU: the device UUID agrees, the driver UUID does not
++    stubvk::reset({copy(7, 9), copy(7, 8)});
++    q = query_device_facts(stubvk::loader(), name, ApiLevel::vk13);
++    CHECK(!q.ok && q.how == "2 physical devices named Stub RADV" && !one_device_named(stubvk::loader(), name));
++    // two GPUs of one model: the device UUID differs
++    stubvk::reset({copy(7, 9), copy(6, 9)});
++    CHECK(!query_device_facts(stubvk::loader(), name, ApiLevel::vk13).ok && !one_device_named(stubvk::loader(), name));
++    // the same UUIDs at another driver version
++    stubvk::reset({copy(7, 9), copy(7, 9)});
++    stubvk::g.devs[1].driver_version = VK_MAKE_API_VERSION(0, 512, 1, 0);
++    CHECK(!query_device_facts(stubvk::loader(), name, ApiLevel::vk13).ok && !one_device_named(stubvk::loader(), name));
++    // a device UUID of zeros identifies nothing
++    stubvk::reset({copy(0, 9), copy(0, 9)});
++    CHECK(!query_device_facts(stubvk::loader(), name, ApiLevel::vk13).ok && !one_device_named(stubvk::loader(), name));
++    // three of one name, two of them copies: still two devices
++    stubvk::reset({copy(7, 9), copy(7, 9), copy(6, 9)});
++    q = query_device_facts(stubvk::loader(), name, ApiLevel::vk13);
++    CHECK(!q.ok && q.how == "3 physical devices named Stub RADV" && !one_device_named(stubvk::loader(), name));
++    // read at 1.1 (a device SDL_gpu made at 1.1), the copies are one device too
++    stubvk::reset({copy(7, 9), copy(7, 9)});
++    CHECK(query_device_facts(stubvk::loader(), name, ApiLevel::vk11).ok);
++}
++
+ namespace {
+ // `r` without shaderClipDistance (as a 1.3 retry for a Mali asks)
+ d9g::shader::DeviceRequest without_clip_for_test(d9g::shader::DeviceRequest r) {
+@@ -3241,6 +3295,7 @@ int main(int argc, char** argv) {
+     test_vk11_device();
+     test_vk11_features();
+     test_vk11_detection();
++    test_one_device_listed_twice();
+     test_vk11_device_choice();
+     if (g_fails) {
+         std::printf("TEST_D3D9GPU_FAIL %d of %d checks\n", g_fails, g_checks);
+-- 
+2.54.0
+

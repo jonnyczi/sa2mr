@@ -1,0 +1,118 @@
+From 6db4f3c058df46c6f5083c77cb35f701b645bd00 Mon Sep 17 00:00:00 2001
+From: jonnyczi <czijonny@gmail.com>
+Date: Sat, 21 Nov 2026 12:30:10 +0800
+Subject: [PATCH] State the fresh-clone build prerequisites the getting-started
+ guide left out
+
+Following docs/getting-started.md from a fresh clone stopped at four places:
+
+- s1_function_map.py reads the SA2 Mod Loader's SA2Functions.h from the path
+  tools/pins.json pins, which nothing told a reader to check out; without it
+  the script stopped with a FileNotFoundError. The guide now gives the clone
+  and the pinned commit, and the script names them when the header is missing.
+- Nothing said where Ghidra, the Temurin JDK and Zig are unpacked; the guide
+  now points at their pinned paths.
+- build_host_deps.sh --fetch never downloads the ALSA headers package; the
+  guide now says to stage it from its pinned URL first.
+- release_build.py links the double f80 build by default, and the guide went
+  from the link tables to the desktop build without the perf_f80.py step that
+  makes it.
+
+The s1 receipt is written to Documentation/receipts/ with the analyzeHeadless
+command and the environment as they ran, which hold the checkout's absolute
+path. The receipt now records them relative to the checkout; run.json under
+private/ghidra keeps them as they ran.
+---
+ Documentation/scripts/s1_function_map.py | 10 ++++++++--
+ docs/getting-started.md                  | 22 ++++++++++++++++++----
+ 2 files changed, 26 insertions(+), 6 deletions(-)
+
+diff --git a/Documentation/scripts/s1_function_map.py b/Documentation/scripts/s1_function_map.py
+index 02b6045..5f23b0a 100644
+--- a/Documentation/scripts/s1_function_map.py
++++ b/Documentation/scripts/s1_function_map.py
+@@ -250,6 +250,10 @@ def string_clusters(image: Image) -> dict:
+ 
+ 
+ def modloader_functions(root: Path) -> tuple[dict[int, str], dict[str, int]]:
++    if not (root / HEADER).is_file():
++        pin = json.loads((root / PINS).read_text())["tools"]["sa2-mod-loader"]
++        sys.exit(f"{HEADER} is missing: check out https://github.com/X-Hax/sa2-mod-loader at "
++                 f"{pin['commit']} into {pin['path']} (tools/pins.json sa2-mod-loader)")
+     text = (root / HEADER).read_text(encoding="utf-8", errors="replace")
+     names: dict[int, str] = {}
+     by_macro: dict[str, int] = {}
+@@ -679,10 +683,12 @@ def main() -> int:
+             "modloader_header_sha256": sha256(root / HEADER),
+             "ghidra_analysis": "default auto-analysis options of analyzeHeadless -import",
+         },
++        # The receipt is in the tracked tree, so the checkout's paths in it are relative to
++        # the checkout: run.json keeps them as they ran.
+         "command": {
+             "driver": ".venv/bin/python Documentation/scripts/s1_function_map.py",
+-            "analyzeHeadless": run["command"],
+-            "env": run["env"],
++            "analyzeHeadless": run["command"].replace(f"{root}/", ""),
++            "env": {k: v.replace(f"{root}/", "") for k, v in run["env"].items()},
+         },
+         "outputs": outputs,
+         "artifacts": {
+diff --git a/docs/getting-started.md b/docs/getting-started.md
+index 28238bd..27d3151 100644
+--- a/docs/getting-started.md
++++ b/docs/getting-started.md
+@@ -113,16 +113,19 @@ Before running a full build, prepare these inputs:
+ - The supported installation's file-verification table.
+ - For Android, the SDK, NDK, and Java tools expected by the Android builder.
+ 
+-`tools/env.sh` names the expected local layout. It adds existing tools to `PATH`; it does not install them or generate the game image. Consult each script's module documentation and `--help` where available before using it.
++`tools/env.sh` names the expected local layout. It adds existing tools to `PATH`; it does not install them or generate the game image. Unpack the pinned Ghidra, Temurin JDK, and Zig releases so that their folders are the `path` of `ghidra`, `java`, and `zig` in `tools/pins.json`. Consult each script's module documentation and `--help` where available before using it.
++
++`tools/s5/build_host_deps.sh --fetch` downloads the pinned source archives, but never the ALSA development headers package. Download the file that `sdl3.alsa_headers.url` in `tools/pins.json` names into `private/s5-tools/dl/` first; the script checks it against the pin.
+ 
+ The current build entry points are:
+ 
+ | Task | Entry point | Prerequisite |
+ | --- | --- | --- |
+-| Make the function map | `Documentation/scripts/s1_function_map.py` | The unpacked executable and Ghidra. |
++| Make the function map | `Documentation/scripts/s1_function_map.py` | The unpacked executable, Ghidra, the Temurin JDK, and the SA2 Mod Loader checkout. |
+ | Translate the whole game image | `tools/s4/rebuild_image.py` | The unpacked executable, the function map, Remill, and Zig. |
+ | Check the translated image | `tools/s4/lift_ir_receipt.py` | A translated image. |
+-| Build host dependencies | `tools/s5/build_host_deps.sh` | The pinned source archives, build tools, and platform headers. |
++| Build host dependencies | `tools/s5/build_host_deps.sh` | The pinned source archives (`--fetch` downloads them), the ALSA headers package staged by hand, build tools, and platform headers. |
++| Compile the image for the desktop link | `tools/s8/perf_f80.py build` | A translated image. |
+ | Assemble a desktop build | `tools/s7/release_build.py` | The generated game image, host libraries, and verification inputs. |
+ | Compile and link the Android game | `tools/s8/android_game.py` | The translated image and Android toolchain. |
+ | Build the Android app | `tools/s8/android_app.py` | The Android game, renderer dependencies, and Android toolchain. |
+@@ -135,9 +138,11 @@ The translated image is the game's code as LLVM modules and native objects. It i
+ 
+ 1. Make the unpacked executable. See [Make the unpacked executable](#make-the-unpacked-executable).
+ 
+-2. Make the function map with Ghidra.
++2. Make the function map with Ghidra. The script reads the function names in the SA2 Mod Loader's `SA2Functions.h`, so first check out the Mod Loader at the commit `tools/pins.json` pins under `sa2-mod-loader`.
+ 
+    ```bash
++   git clone https://github.com/X-Hax/sa2-mod-loader private/predecessor-tools/sa2-mod-loader
++   git -C private/predecessor-tools/sa2-mod-loader checkout 611d686f123e39ee843acea5ceb8d0561233ffea
+    .venv/bin/python Documentation/scripts/s1_function_map.py
+    ```
+ 
+@@ -170,6 +175,15 @@ Before you assemble a desktop build from a fresh image, generate the tables the
+ 
+ The last command writes the read-set that `tools/s7/release_build.py` checks the unpacked executable against. It needs no recorded game runs, and it writes nothing unless its result matches the hash in `Documentation/receipts/s7-drm-unwrap-v1.json`.
+ 
++A desktop build links the double f80 mode by default, from objects that `tools/s8/perf_f80.py` compiles from the translated image. Build them for Linux before you run `tools/s7/release_build.py`:
++
++```bash
++source tools/env.sh
++.venv/bin/python tools/s8/perf_f80.py build --target x86_64-linux-musl --mode double --out private/generated/s8/pc-double/linux-obj --jobs 16
++```
++
++The module documentation of `tools/s7/release_build.py` describes the f80 modes and the Windows objects' folder.
++
+ Local builds embed the absolute paths of their source files, which can include your user name. Before you share a build, list your home folder and anything else private in a JSON file such as `{"terms": ["/home/yourname"]}`, then check the package:
+ 
+ ```bash
+-- 
+2.54.0
+
