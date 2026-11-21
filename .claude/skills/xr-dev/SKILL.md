@@ -98,6 +98,8 @@ Read `external/OpenSA2/host/xr/README.md` first. It holds the measured camera fi
   - Track steering replaces the head's forward in `steer()` with the direction to the centreline 6 stations ahead.
   - **Test:** scratchpad `rr_w.sh` (window grab + `SA2_VR_ROOM_RUN=1` + stick 0,1). Evidence lines: `room run: Sonic at station i of N ... above its deck`, `completed lap`. **The default test head (0,-1.15,0) is below the decks (0.4–1.4 m) and sees only pillars**: use `HEAD=-0.6,0.7,2.6 PITCH=-32` for an overview.
 
+- **Teardown order (2026-11-21).** Release every SDL object the XR player owns (`gloves_.release()`) before `delete in_` in `~XrGpu`; members are destroyed after the body, into a freed SDL device. That was the Frame's "crash on pause" (`malloc(): unsorted double linked list corrupted`): the game had ended, and the player died in teardown after writing a complete report. ASan misses it (the bad writes are inside uninstrumented SDL), and test scripts that kill the session never reach teardown. Test exits with `run_end.sh` (scratchpad: `ENDGAME_AT=N` sends SIGTERM to `sa2-game`) and read `"player": {"exit": ...}` in `launch.runrec`: it must be 0.
+
 ## Frame performance (measured 2026-11-21)
 - Seated VR with about 1,090 world draws: 59.9 fps.
 - With `vr-level-culling` (radius 3000, about 1,780 world draws, so about 3,560 GPU draws after per-eye doubling): about 49–52 fps. Temperature is 75 °C, so it is CPU per-draw cost, not thermal.
