@@ -1,4 +1,10 @@
 Room Run game objects: the share of courses with each, 500 seeds and user spots a play area (Sonic 12 cm)
-1 x 1 m   courses 500 of 500: springs 100% (a hop spring added in 23%), dash panels 95%, dash ramps 0%, enemies 91%, grind rails 100% (42% of the course under one on average), rings 100%; all of springs, panels, enemies, rails and rings 91%
-2 x 2 m   courses 500 of 500: springs 100% (a hop spring added in 11%), dash panels 99%, dash ramps 0%, enemies 97%, grind rails 100% (38% of the course under one on average), rings 100%; all of springs, panels, enemies, rails and rings 97%
-3 x 2.5 m courses 500 of 500: springs 100% (a hop spring added in 8%), dash panels 100%, dash ramps 0%, enemies 100%, grind rails 100% (38% of the course under one on average), rings 100%; all of springs, panels, enemies, rails and rings 100%
+1 x 1 m   courses 500 of 500: springs 100% (a hop spring added in 64%), dash panels 93%, dash ramps 0%, enemies 91%, grind rails 100% (38% of the course under one on average), rings 100%; all of springs, panels, enemies, rails and rings 90%
+          skeletons:  circle 34  coil 45  figure8 3  perimeter 343  tower 75
+          shape: lap per floor area m/m2 p5 0.47  p50 1.29  p95 1.40 | deck height max p50 1.13  p95 1.37 m, mean p50 0.86 m, range p50 0.52 m | tiers 1: 82%  2: 18%  3+: 0% | crossings p50 0  p95 1 | stacked stations p50 0% | smallest deck-to-deck gap where stacked: min 49.0  p5 49.4 units (90 courses stacked)
+2 x 2 m   courses 500 of 500: springs 100% (a hop spring added in 49%), dash panels 98%, dash ramps 0%, enemies 98%, grind rails 100% (36% of the course under one on average), rings 100%; all of springs, panels, enemies, rails and rings 98%
+          skeletons:  circle 8  coil 15  figure8 2  perimeter 151  tower 324
+          shape: lap per floor area m/m2 p5 1.04  p50 1.71  p95 1.92 | deck height max p50 1.20  p95 1.53 m, mean p50 0.87 m, range p50 0.74 m | tiers 1: 34%  2: 66%  3+: 0% | crossings p50 1  p95 1 | stacked stations p50 20% | smallest deck-to-deck gap where stacked: min 48.2  p5 49.5 units (330 courses stacked)
+3 x 2.5 m courses 500 of 500: springs 100% (a hop spring added in 16%), dash panels 100%, dash ramps 0%, enemies 100%, grind rails 100% (33% of the course under one on average), rings 100%; all of springs, panels, enemies, rails and rings 100%
+          skeletons:  coil 31  figure8 10  perimeter 44  tower 415
+          shape: lap per floor area m/m2 p5 0.78  p50 1.26  p95 1.54 | deck height max p50 1.30  p95 1.56 m, mean p50 0.90 m, range p50 0.76 m | tiers 1: 9%  2: 87%  3+: 4% | crossings p50 1  p95 2 | stacked stations p50 18% | smallest deck-to-deck gap where stacked: min 48.3  p5 49.2 units (456 courses stacked)

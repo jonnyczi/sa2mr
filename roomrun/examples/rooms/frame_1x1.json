@@ -1,0 +1,4 @@
+{"notes": "The Frame's 1.11 m play area made a 2 x 2 m course area (the VR player's rule), the user where the Frame test stood; 0.3 m kept free around the user.",
+ "floor": [[-1,-1],[1,-1],[1,1],[-1,1]],
+ "boxes": [],
+ "player": {"pos": [0.10, 0.16], "radius": 0.3}}

@@ -66,7 +66,7 @@ public:
         int n0 = (int)std::ceil(sd.lenMin / stepU_);
         double maxL = 0;
         for (int j = 0; j < n0; ++j) maxL = std::max(maxL, pr_.L[j]);
-        hStart_ = std::clamp(pr_.T[0], std::max(maxL, gp_.prefMinH), gp_.maxH);
+        hStart_ = std::clamp(pr_.T[0], std::max(maxL, sk_.solved ? gp_.minH : gp_.prefMinH), gp_.maxH);
         hStart_ = std::round(hStart_ / 0.01) * 0.01;
         if (hStart_ < maxL) hStart_ += 0.01;
         ScaledPhysics sp(gp_.physics, gp_.speedScale);
@@ -150,6 +150,14 @@ private:
         if (c.score > b[worst].score) b[worst] = std::move(c);
     }
 
+    // The share of a slope that stays walkable on the inside edge of the bends over stations [s0, s1] (the play
+    // mesh measures its slopes on the steepest deck facet, the inside of a bend: playmesh.hpp), with 3% slack.
+    double walkFactor(int s0, int s1, bool rail) const {
+        const double k = rmq_.query(s0, std::min(N_, s1 + 1));
+        const double hw = rail ? gp_.railHalfWidthU : 0.5 * gp_.trackWidthU;
+        return std::max(0.05, 1.0 - k * hw) * 0.97;
+    }
+
     bool banned(Kind k, int s0, int s1) const {
         for (auto& b : opt_.bans)
             if (b.kind == k && s0 < b.s1 && b.s0 < s1) return true;
@@ -175,6 +183,19 @@ private:
         if (rmq_.query(s0, s1) > d.maxCurv) return;
         if (isAirOrVertical(d.kind) && partnerPrefix_[s1] - partnerPrefix_[s0] > 0) return;
         if (banned(d.kind, s0, s1)) return;
+        // a flight the play mesh bridges with a road (a spring's, a homing chain's) must make a walkable ramp: the play
+        // mesh would raise the stations before a steeper one, under a stacked deck too
+        if (d.kind == Kind::Spring || d.kind == Kind::Homing) {
+            const int a = d.kind == Kind::Spring ? s0 + padN : s0 + lipN, b = d.kind == Kind::Spring ? s1 - (n - padN - holeN) : s1 - padN;
+            if (b > a) {
+                const double slope = (m.h1 - m.h0) / ((b - a + 1) * sk_.stepM);
+                const double f = walkFactor(std::max(s0, a - 1), std::min(N_, b + 1), false);
+                if (slope > gp_.walkRise * f || -slope > gp_.walkFall * f) return;
+            }
+        }
+        // a set piece over a catch net restarts a miss from the module before it: not a steep climb (a standing
+        // start there crawls; the bad bot looped net -> climb -> net on a coil)
+        if (d.net && parentIdx >= 0 && par.pm.n() > 0 && (par.pm.h1 - par.pm.h0) / (par.pm.n() * sk_.stepM) > 0.18) return;
         if (!par.env.subsetOf(d.entry)) return;
         double dev = 0, visit = 0;
         for (int j = s0; j < s1; ++j) {
@@ -289,9 +310,13 @@ private:
                 switch (d.kind) {
                     case Kind::Track: case Kind::Dash: case Kind::Loop: dhs = {0.0}; break;
                     case Kind::Ramp: case Kind::Rail: {
-                        double mx = d.maxSlope * lenU * 2 / kPi;
-                        double dh = std::clamp(tgt, std::max(d.dhMin, -mx), std::min(d.dhMax, mx));
-                        if (d.kind == Kind::Ramp && std::fabs(dh) < 6 && !closing) break;
+                        // the steepest slope (an eased module's is pi / 2 times its mean) within the module's own limits
+                        // and walkable on the inside of its bends (the play mesh's rule: playmesh.hpp)
+                        const double f = walkFactor(i, i + n, d.kind == Kind::Rail), shape = d.eased ? 2 / kPi : 1.0;
+                        const double mxUp = std::min(d.maxSlope, gp_.walkRise * f) * lenU * shape;
+                        const double mxDn = std::min(d.maxFall, gp_.walkFall * f) * lenU * shape;
+                        double dh = std::clamp(tgt, std::max(d.dhMin, -mxDn), std::min(d.dhMax, mxUp));
+                        if (d.kind == Kind::Ramp && std::fabs(dh) < d.minDh && !closing) break;
                         dhs = {dh};
                         break;
                     }

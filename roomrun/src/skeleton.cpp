@@ -93,6 +93,7 @@ bool finalizeSkeleton(Skeleton& sk, const std::vector<Vec2>& dense, const FreeSp
     }
     std::sort(straight.begin(), straight.end());
     int pick = straight[rng ? rng->irange(0, std::min<int>(3, (int)straight.size() - 1)) : 0].second;
+    if (sk.keepStart) pick = 0;   // the caller put the start line where it wants it (a tower: the level top before it)
     std::rotate(st.begin(), st.begin() + pick, st.end());
     std::rotate(ks.begin(), ks.begin() + pick, ks.end());
     if (hasT) std::rotate(stT.begin(), stT.begin() + pick, stT.end());
@@ -316,10 +317,30 @@ std::vector<Skeleton> skeletonCandidates(const Room& room, const FreeSpace& fs, 
             }
         }
     }
+    // roller-coaster profiles for most plain loops (all of the height window: stack.cpp), in small rooms nearly all;
+    // coils and towers. Only with a library that can follow them (GenParams::vertical: constant-slope modules)
+    if (gp.vertical) {
+        const double p = bestPerimeter < 8.0 ? 0.8 : 0.55;
+        for (auto& s : out)
+            if ((s.kind == "perimeter" || s.kind == "figure8" || s.kind == "circle") && rng.chance(p)) {
+                Skeleton v = s;
+                if (rollerProfile(v, room, gp, rng)) s = std::move(v);
+            }
+    }
+    // (e) coils: stacked lobes that use the height (coil.cpp)
+    if (gp.vertical) coilCandidates(room, fs, gp, rng, out);
+    // (f) towers: spiral towers hung off the loops above (tower.cpp)
+    if (gp.vertical) {
+        const std::vector<Skeleton> bases = out;
+        towerCandidates(room, fs, gp, rng, bases, out);
+    }
+    // every course within the game's collision budget: at most 860 stations (one deck lane, 8 triangles a station,
+    // under PlayMeshParams::maxCollisionTriangles; 27 pieces of decks and 27 of walls, under 64) and 26 m a lap
+    out.erase(std::remove_if(out.begin(), out.end(), [](const Skeleton& s) { return s.size() > 860 || s.lengthM() > 26.0; }), out.end());
     std::stable_sort(out.begin(), out.end(), [](const Skeleton& a, const Skeleton& b) { return a.prelim > b.prelim; });
     // keep the best of each kind first, then fill by score
     std::vector<Skeleton> picked;
-    for (const char* k : {"perimeter", "figure8", "helix", "circle"})
+    for (const char* k : {"perimeter", "figure8", "helix", "circle", "coil", "tower"})
         for (auto& s : out)
             if (s.kind == k) { picked.push_back(s); break; }
     std::stable_sort(picked.begin(), picked.end(), [](const Skeleton& a, const Skeleton& b) { return a.prelim > b.prelim; });

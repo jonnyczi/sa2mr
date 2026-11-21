@@ -236,10 +236,31 @@ PlayMesh buildPlayMesh(const GenResult& r, const ModuleLibrary& lib, const GenPa
             if (!changed) break;
         }
     };
+    // A deck over another is lifted back to its gap with a smooth bump (a raised cosine over +-liftW stations), not
+    // station by station: the smoothing shaves the crest a stacked deck often sits on (a tower's top over its foot),
+    // and lifting the held stations alone left creases of up to 0.4 a station there. Raising only: the holds stay.
+    const int liftW = 12;
+    std::vector<double> liftKernel(liftW + 1);
+    for (int k = 0; k <= liftW; ++k) liftKernel[k] = 0.5 * (1.0 + std::cos(kPi * k / (liftW + 1)));
     auto keep = [&]() {
         for (int j = 0; j < N; ++j) z[j] = std::max(z[j], lo[j]);
-        for (const Over& o : over)
-            if (z[o.up] - z[o.low] < o.gap) z[o.up] = z[o.low] + o.gap;
+        for (int it = 0; it < 32 && !over.empty(); ++it) {
+            std::vector<double> need(N, 0.0);
+            bool any = false;
+            for (const Over& o : over) {
+                const double d = o.gap - (z[o.up] - z[o.low]);
+                if (d > 1e-12) { need[o.up] = std::max(need[o.up], d + 1e-9); any = true; }
+            }
+            if (!any) break;
+            std::vector<double> lift(N, 0.0);
+            for (int j = 0; j < N; ++j)
+                if (need[j] > 0)
+                    for (int k = -liftW; k <= liftW; ++k) {
+                        const int q = ((j + k) % N + N) % N;
+                        lift[q] = std::max(lift[q], need[j] * liftKernel[std::abs(k)]);
+                    }
+            for (int j = 0; j < N; ++j) z[j] += lift[j];
+        }
     };
     riseLimit(true);
     // The vertical profile smoothed: a box filter over 2 h + 1 stations, pp.smoothPasses times (about a
@@ -393,9 +414,15 @@ PlayMesh buildPlayMesh(const GenResult& r, const ModuleLibrary& lib, const GenPa
     const int every = std::max(2, (int)std::lround(pp.pillarEveryM / c.sk.stepM));
     const double ph = pp.pillarHalfU * mpu;
     for (int j = 0; j < N; j += every) {
+        // none through a deck below: any station whose walkway (with its curbs) the pillar would pass through
+        // (stations along the same deck, within 2.5 walkway widths, are this deck, not one below)
         bool deckBelow = false;
-        if (j < (int)c.sk.partners.size())
-            for (int q : c.sk.partners[j]) deckBelow |= z[q] < z[j] - 1e-6;
+        for (int q = 0; q < N && !deckBelow; ++q) {
+            int d = std::abs(q - j);
+            d = std::min(d, N - d);
+            if (d * c.sk.stepM < 5.0 * hw[j]) continue;
+            deckBelow = z[q] < z[j] - 1e-6 && (P[q] - P[j]).len() < hw[q] + ph + 0.005;
+        }
         if (deckBelow) continue;
         double base = 0;
         for (auto& b : r.room.boxes) if (b.rect.contains(P[j])) base = std::max(base, b.height);

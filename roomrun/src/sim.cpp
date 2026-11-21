@@ -123,6 +123,7 @@ public:
         const long maxFrames = (long)(laps * gp_.maxLapSeconds * 60);
         long frame = 0, lastProgressFrame = 0;
         double lastProgressS = 0, maxS = 0;
+        int lastRespawns = 0;
         int lapsDone = 0;
         long lapStart = 0;
         s_ = 0; d_ = 0; v_ = 0; vd_ = 0;
@@ -142,6 +143,10 @@ public:
                 record_ = false;
                 if (lapsDone >= laps) { rr.finished = true; break; }
             }
+            // a respawn (a missed set piece, back at its checkpoint) restarts the progress window: retries are the
+            // net-loop limit's business (> 8 a lap), "stuck" is no progress on its own (a climb it cannot make), counted
+            // from the checkpoint
+            if (respawns_ != lastRespawns) { lastRespawns = respawns_; lastProgressFrame = frame; maxS = lastProgressS = s_; }
             maxS = std::max(maxS, s_);
             if (frame - lastProgressFrame >= 900) {
                 if (maxS - lastProgressS < 40) {
@@ -216,6 +221,7 @@ private:
         curMod_ = -1;
         lock_ = 0;
         penalty_ = 60;
+        ++respawns_;
     }
 
     void goAirborne(double vz, int fromMod) {
@@ -588,6 +594,7 @@ private:
     Mode mode_ = Mode::Ground;
     double s_ = 0, d_ = 0, v_ = 0, vd_ = 0;
     int curMod_ = 0, lock_ = 0, penalty_ = 0, lapNets_ = 0;
+    int respawns_ = 0;
     FailKind fail_ = FailKind::None;
     int failMod_ = -1;
     int releaseLeft_ = 0, brakeLeft_ = 0;

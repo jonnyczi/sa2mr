@@ -61,6 +61,9 @@ struct ObjectParams {
                                  // module a dash panel (Frame test 2026-11-21: a 2 x 2 m course had rings only)
     double hopApexU = 12.0;      // a hop spring's apex
     int hopMinStations = 6, hopMaxStations = 10;   // its landing, stations ahead
+    int climbSprings = 2;        // springs up a climb onto a higher deck ahead (vertical courses), at most this many
+    int climbSpringMaxStations = 16;   // their landing, at most this far ahead
+    double climbSpringMinRiseM = 0.12; // and at least this much higher
     double smallDashU = 6.0;     // the added dash panel's speed and no-control frames
     int smallDashLock = 24;
     double ringHeightU = 6.0;    // a ring's centre above the deck
@@ -93,6 +96,7 @@ struct ObjectStats {
     int rings = 0, ringLines = 0, ringCircles = 0, springs = 0, dashPanels = 0, dashRamps = 0, enemies = 0, rails = 0;
     int railStations = 0;
     int hopSprings = 0, addedDash = 0, roadRails = 0, grindStations = 0;   // the variety added; stations under a grind path
+    int climbSprings = 0;                                          // springs up a climb onto a higher deck
     int springsDropped = 0, rampsDropped = 0, railsDropped = 0;   // left out by the checks (the bridge / strip remains)
     std::vector<std::string> notes;                                // why each was left out
 };

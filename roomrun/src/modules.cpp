@@ -64,6 +64,9 @@ ModuleLibrary ModuleLibrary::fromJson(const Json& j, double k, std::string* err)
         d.entry = envOf(m["entry"], k);
         if (m["exit"].isObject()) { d.exit = envOf(m["exit"], k); d.fixedExit = true; }
         for (auto& kv : m["params"].obj) d.params[kv.first] = kv.second.num;
+        d.eased = d.param("ease", 1) > 0;
+        d.maxFall = d.param("maxFall", d.maxSlope);
+        d.minDh = d.param("minDh", 6);
         // speed-valued params are scaled too
         for (const char* sp : {"speed", "exitSpeed", "minSpeed", "speedCap"})
             if (d.params.count(sp)) d.params[sp] *= k;

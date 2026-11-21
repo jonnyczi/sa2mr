@@ -34,6 +34,9 @@ struct ModuleDef {
     double dhMin = 0, dhMax = 0;                    // units
     bool walls = false, net = false, fixedExit = false;
     Envelope entry, exit;
+    bool eased = true;      // ramps and rails: eased in and out (params.ease 1, the default) or a constant slope (0)
+    double maxFall = 0;     // the steepest descent (params.maxFall; default maxSlope)
+    double minDh = 6;       // ramps: the least height change (units; params.minDh) below which a flat track is used
     double fun = 0;
     std::map<std::string, double> params;
     double param(const std::string& k, double def = 0) const {

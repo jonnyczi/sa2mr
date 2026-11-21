@@ -35,6 +35,10 @@ Profile buildProfile(const Skeleton& sk, const Room& room, const GenParams& gp, 
             }
         }
     }
+    if (sk.solved) {   // a solved stacked profile (coils): followed as it is, down to the window's floor
+        for (int i = 0; i < N; ++i) pr.T[i] = std::clamp(sk.target[i], std::max(pr.L[i], gp.minH), pr.U[i]);
+        return pr;
+    }
     if (!sk.target.empty()) {
         pr.T = sk.target;
     } else {
@@ -43,7 +47,7 @@ Profile buildProfile(const Skeleton& sk, const Room& room, const GenParams& gp, 
         int w1 = std::max(1, (int)std::round(L / rng.range(2.5, 4.5)));
         int w2 = std::max(2, (int)std::round(L / rng.range(1.2, 2.2)));
         double p1 = rng.range(0, 2 * kPi), p2 = rng.range(0, 2 * kPi);
-        double base = rng.range(0.6, 0.85), a1 = rng.range(0.15, 0.3), a2 = rng.range(0.0, 0.12);
+        double base = rng.range(0.6, 0.95), a1 = rng.range(0.2, 0.45), a2 = rng.range(0.0, 0.15);   // up to the 1.6 m window
         for (int i = 0; i < N; ++i) {
             double t = 2 * kPi * i / N;
             pr.T[i] = base + a1 * std::sin(w1 * t + p1) + a2 * std::sin(w2 * t + p2);

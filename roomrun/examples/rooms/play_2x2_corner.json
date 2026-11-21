@@ -1,0 +1,4 @@
+{"notes": "A 2 x 2 m play area, the user near a corner; 0.3 m kept free around the user.",
+ "floor": [[-1,-1],[1,-1],[1,1],[-1,1]],
+ "boxes": [],
+ "player": {"pos": [0.6, -0.5], "radius": 0.3}}

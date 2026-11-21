@@ -12,10 +12,31 @@
 #include <vector>
 
 #include "roomrun/generator.hpp"
+#include "roomrun/metrics.hpp"
 #include "roomrun/objects.hpp"
 #include "roomrun/playmesh.hpp"
 
 using namespace rr;
+
+static double pct(std::vector<double> v, double p);
+
+// The "shape" line: how the courses use their space (roomrun/include/roomrun/metrics.hpp).
+static void printShape(const std::vector<ShapeMetrics>& v, const char* indent) {
+    std::vector<double> lpa, mx, mean, rng, cross, stack, gap;
+    int t1 = 0, t2 = 0, t3 = 0, stackedCourses = 0;
+    for (auto& s : v) {
+        lpa.push_back(s.lapPerM2); mx.push_back(s.maxDeckM); mean.push_back(s.meanDeckM); rng.push_back(s.maxDeckM - s.minDeckM);
+        cross.push_back(s.crossings); stack.push_back(s.stackedShare);
+        (s.tiers <= 1 ? t1 : s.tiers == 2 ? t2 : t3)++;
+        if (s.minStackGapU > 0) { gap.push_back(s.minStackGapU); stackedCourses++; }
+    }
+    const double k = 100.0 / std::max<size_t>(1, v.size());
+    std::printf("%sshape: lap per floor area m/m2 p5 %.2f  p50 %.2f  p95 %.2f | deck height max p50 %.2f  p95 %.2f m, mean p50 %.2f m, range p50 %.2f m | "
+                "tiers 1: %.0f%%  2: %.0f%%  3+: %.0f%% | crossings p50 %.0f  p95 %.0f | stacked stations p50 %.0f%% | smallest deck-to-deck gap "
+                "where stacked: min %.1f  p5 %.1f units (%d courses stacked)\n", indent, pct(lpa, 0.05), pct(lpa, 0.5), pct(lpa, 0.95),
+                pct(mx, 0.5), pct(mx, 0.95), pct(mean, 0.5), pct(rng, 0.5), t1 * k, t2 * k, t3 * k, pct(cross, 0.5), pct(cross, 0.95),
+                pct(stack, 0.5) * 100, pct(gap, 0.0), pct(gap, 0.05), stackedCourses);
+}
 
 struct Row {
     int room = 0;
@@ -33,6 +54,7 @@ struct Row {
     double pmSteep = 0, pmCrease = 0;
     // the game objects on it (placeObjects): counts, and the flights the checks left out
     int obRings = 0, obSprings = 0, obDash = 0, obRamps = 0, obRails = 0, obSpringsOut = 0, obRampsOut = 0, obRailsOut = 0, obSpringMods = 0;
+    ShapeMetrics shape;
 };
 
 static double pct(std::vector<double> v, double p) {
@@ -72,6 +94,9 @@ int main(int argc, char** argv) {
             std::mutex mu;
             int ok = 0, spring = 0, hop = 0, dash = 0, ramp = 0, enemy = 0, rail = 0, ring = 0, all = 0;
             double grind = 0;
+            std::vector<ShapeMetrics> shapes((size_t)variety);
+            std::vector<uint8_t> have((size_t)variety, 0);
+            std::map<std::string, int> kinds;
             auto work = [&]() {
                 for (int i; (i = next.fetch_add(1)) < variety;) {
                     Rng rng(seed * 7919ull + (uint64_t)i);
@@ -84,7 +109,9 @@ int main(int argc, char** argv) {
                     const PlayMesh pm = buildPlayMesh(r, lib, gp);
                     const CourseObjects co = placeObjects(r, pm, lib, gp);
                     const ObjectStats& s = co.stats;
+                    const ShapeMetrics sh = shapeMetrics(r, pm);
                     std::lock_guard<std::mutex> g(mu);
+                    shapes[(size_t)i] = sh; have[(size_t)i] = 1; kinds[r.course.kind]++;
                     ok++; spring += s.springs > 0; hop += s.hopSprings > 0; dash += s.dashPanels > 0; ramp += s.dashRamps > 0;
                     enemy += s.enemies > 0; rail += s.rails > 0; ring += s.rings > 0;
                     all += s.springs > 0 && s.dashPanels > 0 && s.enemies > 0 && s.rails > 0 && s.rings > 0;
@@ -98,6 +125,12 @@ int main(int argc, char** argv) {
             std::printf("%-9s courses %d of %d: springs %.0f%% (a hop spring added in %.0f%%), dash panels %.0f%%, dash ramps %.0f%%, enemies %.0f%%, "
                         "grind rails %.0f%% (%.0f%% of the course under one on average), rings %.0f%%; all of springs, panels, enemies, rails and "
                         "rings %.0f%%\n", a.name, ok, variety, spring * k, hop * k, dash * k, ramp * k, enemy * k, rail * k, grind * k, ring * k, all * k);
+            std::vector<ShapeMetrics> got;
+            for (size_t q = 0; q < shapes.size(); ++q) if (have[q]) got.push_back(shapes[q]);
+            std::printf("          skeletons:");
+            for (auto& kv : kinds) std::printf("  %s %d", kv.first.c_str(), kv.second);
+            std::printf("\n");
+            printShape(got, "          ");
         }
         return 0;
     }
@@ -159,6 +192,7 @@ int main(int argc, char** argv) {
                         row.obRamps = co.stats.dashRamps; row.obRails = co.stats.rails; row.obSpringsOut = co.stats.springsDropped;
                         row.obRampsOut = co.stats.rampsDropped; row.obRailsOut = co.stats.railsDropped;
                         for (auto& m : c.mods) row.obSpringMods += m.kind == Kind::Spring;
+                        row.shape = shapeMetrics(r, pm);
                         const int N = (int)pm.st.size();
                         const double step = c.sk.stepM;
                         for (int j = 0; j < N; ++j) {
@@ -205,6 +239,7 @@ int main(int argc, char** argv) {
         long nets = 0, falls = 0;
         std::vector<double> len, el, al, bl, ms, pmT, pmP, pmS, pmC;
         std::vector<double> obR;
+        std::vector<ShapeMetrics> shapes;
         long obS = 0, obSO = 0, obD = 0, obRp = 0, obRpO = 0, obRl = 0, obRlO = 0, obSM = 0; int noRings = 0;
         std::map<std::string, int> kinds, failures, use;
         std::map<std::string, std::pair<int, int>> byType;  // ok-without-fallback / total
@@ -228,6 +263,7 @@ int main(int argc, char** argv) {
             pmT.push_back(r.pmTris); pmP.push_back(r.pmPieces); pmS.push_back(r.pmSteep); pmC.push_back(r.pmCrease);
             len.push_back(r.lengthM); el.push_back(r.expertLap); al.push_back(r.avgLap); bl.push_back(r.badLap); ms.push_back(r.ms);
             kinds[r.kind]++;
+            shapes.push_back(r.shape);
             for (auto& kv : r.moduleFailures) failures[kv.first] += kv.second;
             for (auto& kv : r.moduleUse) use[kv.first] += kv.second;
         }
@@ -252,6 +288,7 @@ int main(int argc, char** argv) {
         std::printf("game objects: rings a course p5 %.0f  p50 %.0f  p95 %.0f (%d courses without); springs %ld of %ld spring modules (%ld flights left out); "
                     "dash panels %ld; dash ramps %ld (%ld left out); grind rails %ld (%ld too steep: strip only)\n", pct(obR, 0.05), pct(obR, 0.5),
                     pct(obR, 0.95), noRings, obS, obSM, obSO, obD, obRp, obRpO, obRl, obRlO);
+        printShape(shapes, "");
         std::printf("validator flags per module (all candidates, before repair):");
         for (auto& kv : failures) std::printf("  %s %d", kv.first.c_str(), kv.second);
         std::printf("\nmodule usage in final courses:");
@@ -261,11 +298,11 @@ int main(int argc, char** argv) {
     if (!csv.empty()) {
         FILE* f = std::fopen(csv.c_str(), "w");
         if (f) {
-            std::fprintf(f, "room,type,scale_cm,boxes,ok,fallback,completable,clearance_ok,skeleton,length_m,expert_lap_s,avg_lap_s,bad_lap_s,repairs,modules,nets,gen_ms\n");
+            std::fprintf(f, "room,type,scale_cm,boxes,ok,fallback,completable,clearance_ok,skeleton,length_m,expert_lap_s,avg_lap_s,bad_lap_s,repairs,modules,nets,gen_ms,lap_per_m2,max_deck_m,mean_deck_m,tiers,crossings,min_stack_gap_u\n");
             for (auto& r : rows)
-                std::fprintf(f, "%d,%s,%.0f,%d,%d,%d,%d,%d,%s,%.2f,%.2f,%.2f,%.2f,%d,%d,%d,%.1f\n", r.room, roomTypeName(r.type), r.scaleCm,
+                std::fprintf(f, "%d,%s,%.0f,%d,%d,%d,%d,%d,%s,%.2f,%.2f,%.2f,%.2f,%d,%d,%d,%.1f,%.3f,%.3f,%.3f,%d,%d,%.1f\n", r.room, roomTypeName(r.type), r.scaleCm,
                              r.nBoxes, r.ok, r.fallback, r.completable, r.clearanceOk, r.kind.c_str(), r.lengthM, r.expertLap,
-                             r.avgLap, r.badLap, r.repairs, r.modules, r.nets, r.ms);
+                             r.avgLap, r.badLap, r.repairs, r.modules, r.nets, r.ms, r.shape.lapPerM2, r.shape.maxDeckM, r.shape.meanDeckM, r.shape.tiers, r.shape.crossings, r.shape.minStackGapU);
             std::fclose(f);
         }
     }

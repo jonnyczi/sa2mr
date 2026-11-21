@@ -15,10 +15,10 @@ StationInfo stationInfo(const Placed& m, const ModuleDef& d, int j, const GenPar
     switch (m.kind) {
         case Kind::Start: case Kind::Track: case Kind::Dash: case Kind::Loop: case Kind::SkillRail:
             si.exists = true; si.walled = d.walls; si.z = m.h0; break;
-        case Kind::Ramp:
-            si.exists = true; si.walled = true; si.z = m.h0 + (m.h1 - m.h0) * ease(t); break;
+        case Kind::Ramp:   // eased in and out, or a constant slope (params.ease 0: the spiral modules)
+            si.exists = true; si.walled = true; si.z = m.h0 + (m.h1 - m.h0) * (d.eased ? ease(t) : t); break;
         case Kind::Rail:
-            si.exists = true; si.rail = true; si.walled = d.walls; si.z = m.h0 + (m.h1 - m.h0) * ease(t); break;
+            si.exists = true; si.rail = true; si.walled = d.walls; si.z = m.h0 + (m.h1 - m.h0) * (d.eased ? ease(t) : t); break;
         case Kind::Drop:
             si.exists = true; si.walled = true; si.z = k < m.lipN ? m.h0 : m.h1; break;
         case Kind::Gap:

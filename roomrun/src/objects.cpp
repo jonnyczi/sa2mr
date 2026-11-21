@@ -27,15 +27,16 @@ double hyp(double x, double z) { return std::sqrt(x * x + z * z); }
 
 // The centreline segment j..j+1 nearest a plan point: its station, the fraction along it, the lateral
 // distance, and the deck's height there (metres).
-struct Near { int j = -1; double t = 0, lat = 1e9, deck = 0; };
+struct Near { int j = -1; double t = 0, lat = 1e9, deck = 0; bool beside = false; };   // beside: his projection falls on the segment
 Near nearSeg(const PlayMesh& pm, int j, double x, double z) {
     const int n = (int)pm.st.size();
     const Vec3& a = pm.st[wrap(j, n)].p;
     const Vec3& b = pm.st[wrap(j + 1, n)].p;
     const double dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz;
     double t = l2 > 1e-12 ? ((x - a.x) * dx + (z - a.z) * dz) / l2 : 0;
-    t = std::clamp(t, 0.0, 1.0);
     Near r;
+    r.beside = t >= -1e-9 && t <= 1 + 1e-9;
+    t = std::clamp(t, 0.0, 1.0);
     r.j = wrap(j, n);
     r.t = t;
     r.lat = hyp(x - (a.x + t * dx), z - (a.z + t * dz));
@@ -97,16 +98,23 @@ FlightCheck checkFlight(const PlayMesh& pm, const Vec3& from, const Vec3& vU, in
         p = p + v;
         fc.apexU = std::max(fc.apexU, p.y - y0);
         if (sample) fc.path.push_back(p * pm.mpu);
-        // the course under him: the nearest segment from the last one on, within the module's reach
-        const double x = p.x * pm.mpu, z = p.z * pm.mpu, y = p.y * pm.mpu;
-        Near best;
-        int bestK = -1;
+        // The course under him: the nearest segment from the last one on, within the module's reach. Where decks
+        // stack, the nearest centreline can be a deck a turn below the one he comes down on: then the highest
+        // deck under him whose walkway he is over (a Sonic's height or more above the nearest one) is his.
+        const double x = p.x * pm.mpu, z = p.z * pm.mpu, y = p.y * pm.mpu, yPrev = (p.y - v.y) * pm.mpu;
+        Near best, over;
+        int bestK = -1, overK = -1;
         for (int k = 0; k <= maxAhead; ++k) {
             const int j = wrap(hint + k, n);
             if (wrap(j - fromStation, n) > maxAhead) break;
             Near q = nearSeg(pm, j, x, z);
             if (q.lat < best.lat - 1e-9) { best = q; bestK = k; }
+            if (q.beside && q.lat <= pm.st[q.j].halfW - op.sonicRadiusU * pm.mpu && q.deck <= yPrev + 1e-6 && (overK < 0 || q.deck > over.deck + 1e-9)) {
+                over = q;
+                overK = k;
+            }
         }
+        if (overK >= 0 && bestK >= 0 && over.deck > best.deck + op.sonicHeightU * pm.mpu) { best = over; bestK = overK; }
         if (bestK < 0) { fc.why = "no station ahead"; return fc; }
         hint = best.j;
         const double halfW = pm.st[best.j].halfW;
@@ -314,6 +322,20 @@ CourseObjects placeObjects(const GenResult& r, const PlayMesh& pm, const ModuleL
                     if (free(js - 2, js + a + 2, pass == 0))
                         if (addSpring(js, wrap(js + a, n), op.hopApexU, a + 6, true)) { springs++; out.stats.hopSprings++; }
             }
+    // Climb springs (vertical courses): at the foot of a climb, a spring up onto the deck further up (a shortcut up
+    // the ramp, the biggest rises first), checked as the others; the ramp stays for whoever misses it.
+    for (int c2 = 0; c2 < op.climbSprings && op.springs; ++c2) {
+        int bestJ = -1, bestA = 0;
+        double bestRise = op.climbSpringMinRiseM;
+        for (int js = 0; js < n; ++js)
+            for (int a = op.climbSpringMaxStations; a >= op.hopMinStations; --a) {
+                const double rise = pm.st[wrap(js + a, n)].p.y - pm.st[js].p.y;
+                if (rise > bestRise + 1e-9 && free(js - 2, js + a + 2, false)) { bestRise = rise; bestJ = js; bestA = a; }
+            }
+        if (bestJ < 0) break;
+        if (addSpring(bestJ, wrap(bestJ + bestA, n), op.hopApexU, bestA + 6, true)) { springs++; out.stats.climbSprings++; }
+        else take(bestJ, bestJ);   // not this one again
+    }
     if (op.ensureVariety && op.dashPanels && dashes == 0)
         for (int pass = 0; pass < 3 && !dashes; ++pass)
             for (int k = 0; k < n && !dashes; ++k) {
@@ -506,9 +528,9 @@ std::string objectSummary(const CourseObjects& o) {
     std::snprintf(b, sizeof b,
                   "%d rings (%d lines, %d circles), %d springs (%d left out), %d dash panels, %d dash ramps (%d left out), "
                   "%d grind rails (%d over road) under %d of the stations (%d rail-strip stations), %d enemies; added for variety: %d hop "
-                  "springs, %d dash panels",
+                  "springs, %d dash panels; %d climb springs",
                   s.rings, s.ringLines, s.ringCircles, s.springs, s.springsDropped, s.dashPanels, s.dashRamps, s.rampsDropped,
-                  s.rails, s.roadRails, s.grindStations, s.railStations, s.enemies, s.hopSprings, s.addedDash);
+                  s.rails, s.roadRails, s.grindStations, s.railStations, s.enemies, s.hopSprings, s.addedDash, s.climbSprings);
     return b;
 }
 

@@ -71,12 +71,23 @@ static bool makeSafe(Placed& m, const ModuleLibrary& lib, const GenParams& gp, c
         if (m.kind == Kind::Rail) return false;
         return kmax <= lib.defs[iTrack].maxCurv ? set(iTrack) : set(iRail);
     }
-    const ModuleDef& r = lib.defs[iRail];
-    if (m.kind != Kind::Rail && std::fabs(dhU) <= r.maxSlope * lenU * 2 / kPi && kmax <= r.maxCurv) return set(iRail);
+    // A climb or descent: a rail strip of the same profile (eased stays eased, a constant slope stays constant:
+    // the heights mid-module are what keep stacked decks apart), its slope walkable on the inside of its bends.
+    auto walk = [&](double hwU) { return std::max(0.05, 1.0 - kmax * hwU) * 0.97; };
+    const bool linear = !lib.defs[m.def].eased && (m.kind == Kind::Ramp || m.kind == Kind::Rail);
+    const int iSpiral = lib.find("spiral_rail");
+    const int iSame = linear && iSpiral >= 0 ? iSpiral : iRail;
+    const ModuleDef& r = lib.defs[iSame];
+    const double shape = r.eased ? 2 / kPi : 1.0;
+    const double lim = dhU > 0 ? std::min(r.maxSlope, gp.walkRise * walk(gp.railHalfWidthU)) : std::min(r.maxFall, gp.walkFall * walk(gp.railHalfWidthU));
+    if (m.def != iSame && std::fabs(dhU) <= lim * lenU * shape && kmax <= r.maxCurv && (linear || r.eased)) return set(iSame);
+    if (linear) return false;   // a spring's flight would leave its bridge mid-module, under or over a stacked deck
+    for (int j = m.s0; j < m.s1; ++j) if (!sk.partners[j].empty()) return false;   // no flights where decks stack
     const ModuleDef& s = lib.defs[iSpring];
     if (m.kind != Kind::Spring && dhU >= s.dhMin && dhU <= s.dhMax) {
         int pad = (int)std::ceil(s.param("pad", 8) / gp.stationU), land = (int)std::ceil(s.param("land", 16) / gp.stationU);
-        if (m.n() - pad - land >= 3) {
+        const double bridge = dhU / ((m.n() - pad - land + 1) * gp.stationU);   // the play mesh's ramp under the flight
+        if (m.n() - pad - land >= 3 && bridge <= gp.walkRise * walk(0.5 * gp.trackWidthU) && -bridge <= gp.walkFall * walk(0.5 * gp.trackWidthU)) {
             set(iSpring);
             m.padN = pad; m.holeN = m.n() - pad - land;
             return true;
@@ -109,19 +120,27 @@ bool repairCourse(Course& c, const ValidationReport& rep, const ModuleLibrary& l
             const ModuleDef& s = lib.defs[iSpring];
             double dhU = (m.h1 - m.h0) / gp.metersPerUnit();
             int pad = (int)std::ceil(s.param("pad", 8) / gp.stationU), land = (int)std::ceil(s.param("land", 16) / gp.stationU);
-            if (dhU >= s.dhMin && dhU <= s.dhMax && m.n() - pad - land >= 3) {
+            double kmax = 0;
+            for (int j = m.s0; j < m.s1; ++j) kmax = std::max(kmax, std::fabs(c.sk.curv[j]));
+            const double f = std::max(0.05, 1.0 - kmax * 0.5 * gp.trackWidthU) * 0.97;
+            const double bridge = dhU / ((m.n() - pad - land + 1) * gp.stationU);   // the play mesh's ramp under the flight: walkable
+            if (dhU >= s.dhMin && dhU <= s.dhMax && m.n() - pad - land >= 3 && bridge <= gp.walkRise * f && -bridge <= gp.walkFall * f) {
                 m.def = iSpring; m.kind = Kind::Spring; m.padN = pad; m.lipN = 0; m.holeN = m.n() - pad - land;
                 m.repaired = true; did = true; note(m, "swap to spring");
             }
         }
         if (!did && m.kind == Kind::Rail && lvl == 0) {
             // widen: an exposed rail becomes walled track/ramp where the geometry allows it
-            const ModuleDef& ramp = lib.defs[lib.findKind(Kind::Ramp)];
+            // (a constant-slope rail becomes a constant-slope ramp: the heights mid-module keep stacked decks apart)
+            const int iRamp = !d.eased && lib.find("spiral_ramp") >= 0 ? lib.find("spiral_ramp") : lib.findKind(Kind::Ramp);
+            const ModuleDef& ramp = lib.defs[iRamp];
             double dhU = (m.h1 - m.h0) / gp.metersPerUnit(), lenU = m.n() * gp.stationU, kmax = 0;
             for (int j = m.s0; j < m.s1; ++j) kmax = std::max(kmax, std::fabs(c.sk.curv[j]));
+            const double f = std::max(0.05, 1.0 - kmax * 0.5 * gp.trackWidthU) * 0.97;
+            const double lim = dhU > 0 ? std::min(ramp.maxSlope, gp.walkRise * f) : std::min(ramp.maxFall, gp.walkFall * f);
             int target = -1;
             if (std::fabs(dhU) < 1e-6 && kmax <= lib.defs[lib.findKind(Kind::Track)].maxCurv) target = lib.findKind(Kind::Track);
-            else if (std::fabs(dhU) <= ramp.maxSlope * lenU * 2 / kPi && kmax <= ramp.maxCurv) target = lib.findKind(Kind::Ramp);
+            else if (std::fabs(dhU) <= lim * lenU * (ramp.eased ? 2 / kPi : 1.0) && kmax <= ramp.maxCurv && ramp.eased == d.eased) target = iRamp;
             if (target >= 0) {
                 m.def = target; m.kind = lib.defs[target].kind; m.repaired = true; did = true;
                 note(m, "widen rail to walled track");

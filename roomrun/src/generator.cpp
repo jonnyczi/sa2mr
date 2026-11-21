@@ -133,7 +133,13 @@ GenResult generateCourse(const Room& input, uint64_t userSeed, const GenParams& 
     Rng rng(seed);
     res.free = buildFreeSpace(room, gp);
 
-    auto cands = skeletonCandidates(room, res.free, gp, rng);
+    GenParams gpv = gp;   // the vertical shapes need constant-slope ramps (and rails) to follow their profiles
+    {
+        bool linRamp = false, rail = false;
+        for (auto& d : lib.defs) { linRamp |= d.kind == Kind::Ramp && !d.eased; rail |= d.kind == Kind::Rail; }
+        gpv.vertical = gp.vertical && linRamp && rail;
+    }
+    auto cands = skeletonCandidates(room, res.free, gpv, rng);
     if (gp.debug) std::fprintf(stderr, "  [t] free space + skeletons %.0f ms\n", std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
     double bestScore = -1e18;
     bool have = false;
@@ -187,10 +193,20 @@ GenResult generateCourse(const Room& input, uint64_t userSeed, const GenParams& 
                 continue;
             }
         }
-        // crossings and helices are the "wow" layouts; seed jitter varies the pick between good options
-        double kindBonus = (sk.kind == "figure8" || sk.kind == "helix") ? 3.0 : 0.0;
+        // the room's height used: the decks' range and the share stacked over another deck
+        double zmin = 1e9, zmax = -1e9;
+        int stacked = 0;
+        for (int j = 0; j < c.sk.size(); ++j) {
+            zmin = std::min(zmin, c.z[j]);
+            zmax = std::max(zmax, c.z[j]);
+            stacked += !c.sk.partners[j].empty();
+        }
+        // crossings, helices, coils and towers are the "wow" layouts when they do stack; seed jitter varies the
+        // pick between good options
+        double kindBonus = stacked > 0 && (sk.kind == "figure8" || sk.kind == "helix" || sk.kind == "coil" || sk.kind == "tower") ? 3.0 : 0.0;
         if (!gp.preferSkeleton.empty() && sk.kind == gp.preferSkeleton) kindBonus += 1000;
-        double score = asmScore + 0.4 * std::min(rep.expertLap, 25.0) - 0.5 * c.repairs + kindBonus + crng.range(0, 2.0);
+        const double space = 4.0 * (zmax - zmin) + 6.0 * stacked / std::max(1, c.sk.size());
+        double score = asmScore + 0.4 * std::min(rep.expertLap, 25.0) - 0.5 * c.repairs + kindBonus + space + crng.range(0, 2.0);
         if (score > bestScore) {
             bestScore = score;
             res.course = c;

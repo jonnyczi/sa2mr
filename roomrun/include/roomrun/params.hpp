@@ -6,7 +6,7 @@
 
 namespace rr {
 
-constexpr const char* kGeneratorVersion = "roomrun-0.1.0";
+constexpr const char* kGeneratorVersion = "roomrun-0.2.0";   // 0.2: coils (stacked lobes), 0.2-1.6 m, jump-high stacking
 
 // Sonic-lite physics, in *unscaled* SA2-ish units per frame @60 fps.
 struct Physics {
@@ -55,12 +55,31 @@ struct GenParams {
     double wallMarginM = 0.05;   // track edge to room wall
     double boxMarginM = 0.04;    // track edge to furniture side
     double tallBoxM = 1.30;      // boxes taller than this are obstacles, not landable
-    double minH = 0.30, prefMinH = 0.40, maxH = 1.40;  // track height window (m)
-    double layerGapU = 30.0;     // vertical clearance between stacked track layers
+    // Track height window (m): decks from 0.2 m (a coil's lowest tier) to 1.6 m (within a standing user's reach);
+    // plain loops and the fallback keep to prefMinH and up.
+    double minH = 0.20, prefMinH = 0.40, maxH = 1.60;
+    // Stacked decks (a deck over another, in plan): deck to deck at least layerGapU, enough for Sonic and his full jump
+    // under the upper deck's underside. Measured in the game (host/xr/README "Room Run: no snapping onto the bridge",
+    // the Frame's figure-8): a jump peaks 35 units above the ground, his collision top 10 units above his position
+    // (he peaked at +94.6 under an underside at +104.7), and the play mesh's underside is 2 units below its deck:
+    // 35 + 10 + 2 = 47, plus 1 of margin.
+    double jumpApexU = 35.0, sonicTopU = 10.0, deckUndersideU = 2.0;
+    double layerGapU = 48.0;     // >= jumpApexU + sonicTopU + deckUndersideU (the tests check it)
+    double stackMarginU = 4.0;   // the coil profiles aim this much above layerGapU (modules and smoothing then have slack)
     double gridResM = 0.025;     // distance field resolution
+    double railHalfWidthU = 7.0; // a rail strip's half width (as PlayMeshParams::railHalfWidthU): its walkable slopes
 
     int beamWidth = 10;
-    int maxCandidates = 4;
+    int maxCandidates = 5;
+    bool vertical = true;        // roller profiles, coils and towers (generateCourse turns them off for a library without
+                                 // constant-slope ramps and rails to follow them: Chao Race)
+    int coilTrials = 28;         // random lobe chains tried a room (coilCandidates); the best few are assembled
+    int coilKeep = 2;            // coil candidates kept for assembly
+    // walkable slopes the generator keeps to (the play mesh's limits, on the inside edge of a bend: playmesh.hpp)
+    double walkRise = 0.45, walkFall = 0.8;
+    // the solved profiles (coils, towers, roller loops) plan within these shares of the walkable slopes: climbs
+    // gentler (a weak player, or the bad bot, holding a half stick still gets up a long climb), descents nearly all
+    double coilRiseSafety = 0.82, coilFallSafety = 0.95;
     int botRuns = 32;            // perturbed bot runs per validation
     int maxRepairRounds = 6;
     double maxLapSeconds = 90.0;
