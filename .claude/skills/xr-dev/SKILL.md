@@ -118,6 +118,12 @@ Read `external/OpenSA2/host/xr/README.md` first. It holds the measured camera fi
   - **Test hooks:** `SA2_XR_TEST_RSTICKS`, `SA2_XR_TEST_ROOM_RUN_USER` (0.02,0.05 with seed 3 gives a figure-8 with a bridge), `SA2_VR_POS_LOG=N`.
   - **Never run two `run_vs.sh` at once:** they share and restore the release's `game.env`.
 
+- **Frame mode fixes, round 3 (2026-11-21).** README "Fixes from the Frame's third test".
+  - **Judge a put-back by Sonic AND the camera.** The Frame's "he falls into the void" was the game camera under the street; Sonic stood on it. The player's `game camera record` lines (`player at`) tell them apart. The camera carries itself by his teleports: hold its location and work (`0x01DCFF0C`) for 3 updates after any teleport.
+  - **Game collision: never put walls in a deck's dynamic-collision piece.** On a slope, touching a wall in the same piece sank him 0.5 units into the deck without ground. Each piece's triangles go highest Z first (the cache's band chains).
+  - **Test at the Frame's spots:** `SA2_VR_TEST_TP=F:x,y,z`; `SA2_VR_POS_LOG` logs collision, cache, pool and camera. Scratchpad `pb_w.sh` (take out, room, run, put back; `WY` moves the drop point on the window, `STEPS` stick steps).
+  - **Ramp tests:** scratchpad `rr_ramp.sh` (the Frame's course, the hand drops him on station `ST` via the `k` frame, track steering forward then back) and `course_ramp.py <media dir>` (his height against the deck every 2 frames, passes, monotonic or not, samples without ground). Diagnostics `SA2_XR_ROOM_RUN_WALLS_APART=0`, `SA2_XR_ROOM_RUN_SHAPE=v0`.
+
 ## Frame performance (measured 2026-11-21)
 - Seated VR with about 1,090 world draws: 59.9 fps.
 - With `vr-level-culling` (radius 3000, about 1,780 world draws, so about 3,560 GPU draws after per-eye doubling): about 49–52 fps. Temperature is 75 °C, so it is CPU per-draw cost, not thermal.

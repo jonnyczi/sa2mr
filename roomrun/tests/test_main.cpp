@@ -1,4 +1,5 @@
 // Minimal self-contained test runner (no framework dependency).
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -233,18 +234,44 @@ static void testTinyRoomRejected() {
 // The playable mesh (Room Run v0 in the game): continuous, walled, inside the room, deterministic.
 static void checkPlayMesh(const GenResult& r, const ModuleLibrary& lib, const GenParams& gp) {
     PlayMeshParams pp;
+    const PlayMesh game = buildPlayMesh(r, lib, gp, pp);   // as the game gets it: each chunk sorted by Z
+    pp.sortForGame = false;                                // in station order, for the checks by position below
     PlayMesh m = buildPlayMesh(r, lib, gp, pp);
     const int N = r.course.sk.size();
     CHECK((int)m.st.size() == N);
+    {   // the game's order: the same triangles, each chunk's by their middle's Z, highest first
+        bool same = game.chunks.size() == m.chunks.size(), sorted = true;
+        for (size_t i = 0; same && i < m.chunks.size(); ++i) {
+            const auto& a = game.chunks[i].tri;
+            same = a.size() == m.chunks[i].tri.size();
+            for (size_t t = 1; same && t < a.size() / 9; ++t)
+                sorted &= a[9 * t - 7] + a[9 * t - 4] + a[9 * t - 1] >= a[9 * t + 2] + a[9 * t + 5] + a[9 * t + 8];
+            std::vector<float> x = a, y = m.chunks[i].tri;
+            std::sort(x.begin(), x.end());
+            std::sort(y.begin(), y.end());
+            same &= x == y;
+        }
+        CHECK(same);
+        CHECK(sorted);
+    }
     const double rise = pp.maxRiseSlope * r.course.sk.stepM + 1e-6;
     int steep = 0;
-    for (int j = 0; j < N; ++j) steep += m.st[(j + 1) % N].p.y - m.st[j].p.y > rise;
+    for (int j = 0; j < N; ++j) {
+        steep += m.st[(j + 1) % N].p.y - m.st[j].p.y > rise;
+        if (m.st[(j + 1) % N].p.y - m.st[j].p.y > rise && std::getenv("RR_PLAYMESH_STATS"))
+            std::printf("    steep rise %.4f at station %d/%d (limit %.4f)\n", m.st[(j + 1) % N].p.y - m.st[j].p.y, j, N, rise);
+    }
     CHECK(steep == 0);
-    int stations = 0, badDeck = 0, badWall = 0, outside = 0;
+    int stations = 0, wallStations = 0, badDeck = 0, badWall = 0, outside = 0, steepDeck = 0;
+    // per station: the deck's lanes and its underside's in a deck piece, the two walls in a wall piece of their own
+    // (the game resolved a wall in the deck's own piece badly: on a slope Sonic sank into the deck and lost the ground)
+    const int deckT = 2 * m.lanes;
+    double maxTilt = 0;
     for (auto& c : m.chunks) {
         CHECK(c.s1 - c.s0 <= pp.chunkStations && c.s1 > c.s0);
-        stations += c.s1 - c.s0;
-        CHECK(c.tri.size() == (size_t)(c.s1 - c.s0) * 8 * 9);   // per station: the deck, its underside, two walls
+        const int perSt = c.walls ? 4 : 2 * deckT;
+        (c.walls ? wallStations : stations) += c.s1 - c.s0;
+        CHECK(c.tri.size() == (size_t)(c.s1 - c.s0) * perSt * 9);
         for (size_t t = 0; t < c.tri.size() / 9; ++t) {
             const float* v = &c.tri[9 * t];
             const Vec3 a{v[0], v[1], v[2]}, b{v[3], v[4], v[5]}, cc{v[6], v[7], v[8]};
@@ -253,18 +280,100 @@ static void checkPlayMesh(const GenResult& r, const ModuleLibrary& lib, const Ge
             const double l = n.len();
             if (l < 1e-12) continue;
             const double ny = n.y / l;
-            const int j = c.s0 + (int)(t / 8), jn = (j + 1) % N;
-            const bool drop = m.st[jn].p.y < m.st[j].p.y - 1e-6;   // a drop module's lip: steep, down only
-            if ((t % 8) < 2) badDeck += ny <= 0.0 || (ny < 0.5 && !drop);   // the deck faces up
-            else if ((t % 8) < 4) badDeck += ny >= 0.0 || (ny > -0.5 && !drop);   // its underside faces down (a ceiling)
-            else badWall += std::fabs(ny) > 1e-3;         // the walls stand upright
-            for (int k = 0; k < 3; ++k) outside += !pointInPolygon(r.room.floor, Vec2{v[3 * k], -v[3 * k + 2]});
+            const int j = c.s0 + (int)(t / perSt), jn = (j + 1) % N, k = (int)(t % perSt);
+            const bool drop = m.st[jn].p.y < m.st[j].p.y - 1e-6 &&   // a drop module's lip: steep, down only
+                              m.st[j].p.y - m.st[jn].p.y > pp.dropSlope * 0.5 * r.course.sk.stepM;
+            if (c.walls) badWall += std::fabs(ny) > 1e-3;   // the walls stand upright
+            else if (k < deckT) {
+                badDeck += ny <= 0.0 || (ny < 0.5 && !drop);   // the deck faces up
+                if (!drop) {   // and no facet of it is steeper than the walkway's limit (a bend's inner edge)
+                    const double tilt = std::acos(std::min(1.0, ny));
+                    maxTilt = std::max(maxTilt, tilt);
+                    const double lim = std::atan(m.st[jn].p.y >= m.st[j].p.y ? pp.maxRiseSlope : pp.maxFallSlope) + 0.03;
+                    steepDeck += tilt > lim;
+                    if (tilt > lim && std::getenv("RR_PLAYMESH_STATS")) {
+                        const int jp = (j + N - 1) % N;
+                        std::printf("    steep facet %.1f deg at station %d/%d lane tri %d: z %.4f %.4f %.4f slope %.3f, halfW %.4f %.4f, run %.4f, "
+                                    "bridged %d kind %s, edges %.4f %.4f %.4f\n", tilt * 57.2958, j, N, k, m.st[jp].p.y, m.st[j].p.y, m.st[jn].p.y,
+                                    (m.st[jn].p.y - m.st[j].p.y) / r.course.sk.stepM, m.st[j].halfW, m.st[jn].halfW,
+                                    std::hypot(m.st[jn].p.x - m.st[j].p.x, m.st[jn].p.z - m.st[j].p.z), (int)m.st[j].bridged,
+                                    playKindName(m.st[j].kind), (b - a).len(), (cc - b).len(), (a - cc).len());
+                    }
+                }
+            }
+            else badDeck += ny >= 0.0 || (ny > -0.5 && !drop);   // its underside faces down (a ceiling)
+            for (int q = 0; q < 3; ++q) outside += !pointInPolygon(r.room.floor, Vec2{v[3 * q], -v[3 * q + 2]});
         }
     }
     CHECK(stations == N);
+    CHECK(wallStations == N);
     CHECK(badDeck == 0);
     CHECK(badWall == 0);
     CHECK(outside == 0);
+    CHECK(steepDeck == 0);
+    // the profile bends gradually (no one-station crease: the Frame's ramps behaved as steps and ledges),
+    // except at a drop's lip and where a constraint (a furniture top, a crossing's gap) holds it
+    int creases = 0;
+    double maxCrease = 0;
+    for (int j = 0; j < N; ++j) {
+        const int jp = (j + N - 1) % N, jn = (j + 1) % N;
+        const double s0 = (m.st[j].p.y - m.st[jp].p.y) / r.course.sk.stepM, s1 = (m.st[jn].p.y - m.st[j].p.y) / r.course.sk.stepM;
+        if (s0 < -pp.dropSlope * 0.5 || s1 < -pp.dropSlope * 0.5) continue;
+        maxCrease = std::max(maxCrease, std::fabs(s1 - s0));
+        creases += std::fabs(s1 - s0) > pp.maxCreaseSlope + 1e-9;
+        if (std::fabs(s1 - s0) > pp.maxCreaseSlope + 1e-9 && std::getenv("RR_PLAYMESH_STATS"))
+            std::printf("    crease %.3f at station %d/%d: slopes %.3f %.3f, z %.4f (generator %.4f, exists %d hole %d), partners %zu, kind %s\n",
+                        s1 - s0, j, N, s0, s1, m.st[j].p.y, r.course.z[j], (int)r.course.exists[j], (int)r.course.hole[j],
+                        j < (int)r.course.sk.partners.size() ? r.course.sk.partners[j].size() : 0, playKindName(m.st[j].kind));
+    }
+    CHECK(creases * 50 <= N);   // at most 2% of the stations (the constrained ones)
+    // the walkway's width changes gently (no wall corner to get stuck in)
+    int widthSteps = 0;
+    for (int j = 0; j < N; ++j) widthSteps += std::fabs(m.st[(j + 1) % N].halfW - m.st[j].halfW) > pp.widthRateU * m.mpu + 1e-9;
+    CHECK(widthSteps == 0);
+    // where one deck passes over another, the gap is still the generator's or the layer gap
+    int lowGap = 0;
+    for (int j = 0; j < N && j < (int)r.course.sk.partners.size(); ++j)
+        for (int q : r.course.sk.partners[j]) {
+            const double g0 = r.course.z[j] - r.course.z[q];
+            if (!r.course.exists[j] || !r.course.exists[q] || r.course.hole[j] || r.course.hole[q] || g0 <= 1e-6) continue;
+            lowGap += m.st[j].p.y - m.st[q].p.y < std::min(g0, gp.layerGapU * m.mpu) - 1e-6;
+        }
+    CHECK(lowGap == 0);
+    // The bots on the play mesh's profile (its heights where the generator had a surface): the expert and
+    // average drivers complete every run, and the bad driver fails no more runs than on the profile the
+    // shaping starts from (v0's: bridges and the backwards rise rule only). That rule already lifts a
+    // spring's take-off in a few rooms (up to 30 cm), and the bad driver then misses 1 of its runs there:
+    // the flights the bots fly are bridged ramps in the game, so that is the bots' model, not the game's.
+    {
+        auto onMesh = [&](const PlayMesh& pm) {
+            Course c2 = r.course;
+            for (int j = 0; j < N; ++j)
+                if (c2.exists[j] && !c2.hole[j]) c2.z[j] = pm.st[j].p.y;
+            return validateCourse(c2, lib, gp, r.course.seed);
+        };
+        auto badOnly = [](const ValidationReport& rep) {
+            int n = 0;
+            for (auto& s : rep.failReasons) n += s.rfind("bad:", 0) != 0;
+            return n == 0;
+        };
+        const ValidationReport rep = onMesh(m);
+        CHECK(badOnly(rep));
+        if (!rep.completable) {
+            PlayMeshParams v0 = pp;
+            v0.smoothPasses = 0; v0.deckLanes = 1; v0.widthRateU = 1e9; v0.maxFallSlope = 1e9;
+            const ValidationReport rep0 = onMesh(buildPlayMesh(r, lib, gp, v0));
+            CHECK(rep.failedRuns <= rep0.failedRuns);
+            if (std::getenv("RR_PLAYMESH_STATS")) {
+                std::printf("    bots on the play mesh: %d of %d runs failed (on v0's profile %d):", rep.failedRuns, rep.runs, rep0.failedRuns);
+                for (size_t i = 0; i < rep.failReasons.size() && i < 6; ++i) std::printf(" [%s]", rep.failReasons[i].c_str());
+                std::printf("\n");
+            }
+        }
+    }
+    if (std::getenv("RR_PLAYMESH_STATS"))
+        std::printf("  play mesh: %d stations, steepest deck facet %.1f deg, largest crease %.3f (%d over %.2f), %zu collision triangles\n",
+                    N, maxTilt * 57.2958, maxCrease, creases, pp.maxCreaseSlope, m.collisionTriangles());
     bool road = false, curb = false;
     for (auto& g : m.groups) { road |= g.name == "road" && g.triangles() > 0; curb |= g.name == "curb_a" && g.triangles() > 0; }
     CHECK(road && curb);

@@ -2,6 +2,7 @@
 //   roomrun-batch --rooms 1000 [--seed S] [--threads T] [--csv out.csv]
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <map>
@@ -11,6 +12,7 @@
 #include <vector>
 
 #include "roomrun/generator.hpp"
+#include "roomrun/playmesh.hpp"
 
 using namespace rr;
 
@@ -24,6 +26,10 @@ struct Row {
     double lengthM = 0, expertLap = 0, avgLap = 0, badLap = 0, ms = 0;
     int repairs = 0, modules = 0, nets = 0, falls = 0, rejectedPlayerSpots = 0;
     std::map<std::string, int> moduleFailures, moduleUse;
+    // the playable mesh the game gets (buildPlayMesh): collision triangles and pieces, the steepest walkable deck
+    // facet (degrees; drops left out), the largest slope change between stations (drops left out)
+    int pmTris = 0, pmPieces = 0;
+    double pmSteep = 0, pmCrease = 0;
 };
 
 static double pct(std::vector<double> v, double p) {
@@ -95,6 +101,35 @@ int main(int argc, char** argv) {
                         writeFile(dumpDir + "/fallback_" + std::to_string(i) + "_" + std::to_string((int)row.scaleCm) + ".json",
                                   roomToJson(r.room).dump(3, true));
                     for (auto& m : c.mods) row.moduleUse[lib.defs[m.def].id]++;
+                    {
+                        const PlayMeshParams pp;
+                        const PlayMesh pm = buildPlayMesh(r, lib, gp, pp);
+                        row.pmTris = (int)pm.collisionTriangles();
+                        row.pmPieces = (int)pm.chunks.size();
+                        const int N = (int)pm.st.size();
+                        const double step = c.sk.stepM;
+                        for (int j = 0; j < N; ++j) {
+                            const double s0 = (pm.st[j].p.y - pm.st[(j + N - 1) % N].p.y) / step, s1 = (pm.st[(j + 1) % N].p.y - pm.st[j].p.y) / step;
+                            if (s0 < -pp.dropSlope * 0.5 || s1 < -pp.dropSlope * 0.5) continue;
+                            row.pmCrease = std::max(row.pmCrease, std::fabs(s1 - s0));
+                            if (std::fabs(s1 - s0) > 0.15 && std::getenv("RR_PM_DEBUG"))
+                                std::fprintf(stderr, "room %d scale %.0f: crease %.3f at station %d of %d (slopes %.3f %.3f), held %d, bridged %d, kind %s, generator %s z %.3f -> %.3f\n",
+                                             i, scales[si] * 100, s1 - s0, j, N, s0, s1, pm.st[j].held, (int)pm.st[j].bridged, playKindName(pm.st[j].kind),
+                                             c.exists[j] ? (c.hole[j] ? "hole" : "deck") : "none", c.z[j], pm.st[j].p.y);
+                        }
+                        for (auto& ch : pm.chunks) {
+                            if (ch.walls) continue;
+                            for (size_t t = 0; t < ch.tri.size() / 9; ++t) {
+                                const float* v = &ch.tri[9 * t];
+                                const double e1[3] = {v[3] - v[0], v[4] - v[1], v[5] - v[2]}, e2[3] = {v[6] - v[0], v[7] - v[1], v[8] - v[2]};
+                                const double n[3] = {e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]};
+                                const double l = std::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+                                if (l < 1e-12 || n[1] <= 0) continue;   // the deck's facets (up), not its underside
+                                const double tilt = std::acos(std::min(1.0, n[1] / l)) * 57.29578;
+                                if (tilt < std::atan(pp.dropSlope * 0.5) * 57.29578) row.pmSteep = std::max(row.pmSteep, tilt);
+                            }
+                        }
+                    }
                 }
             }
             if (i % 100 == 99) {
@@ -115,7 +150,7 @@ int main(int argc, char** argv) {
     for (int si = 0; si < 2; ++si) {
         int n = 0, ok = 0, fb = 0, comp = 0, clear = 0, rep = 0, repCourses = 0, fallCourses = 0, netCourses = 0;
         long nets = 0, falls = 0;
-        std::vector<double> len, el, al, bl, ms;
+        std::vector<double> len, el, al, bl, ms, pmT, pmP, pmS, pmC;
         std::map<std::string, int> kinds, failures, use;
         std::map<std::string, std::pair<int, int>> byType;  // ok-without-fallback / total
         for (auto& r : rows) {
@@ -133,6 +168,7 @@ int main(int argc, char** argv) {
             if (r.falls) ++fallCourses;
             if (r.nets) ++netCourses;
             nets += r.nets; falls += r.falls;
+            pmT.push_back(r.pmTris); pmP.push_back(r.pmPieces); pmS.push_back(r.pmSteep); pmC.push_back(r.pmCrease);
             len.push_back(r.lengthM); el.push_back(r.expertLap); al.push_back(r.avgLap); bl.push_back(r.badLap); ms.push_back(r.ms);
             kinds[r.kind]++;
             for (auto& kv : r.moduleFailures) failures[kv.first] += kv.second;
@@ -153,6 +189,9 @@ int main(int argc, char** argv) {
         std::printf("final validation (32 runs x 3 laps per course): catch-net respawns %ld in %d courses; no-net falls (checkpoint restart) %ld in %d courses\n",
                     nets, netCourses, falls, fallCourses);
         std::printf("gen time ms    p50 %.0f  p95 %.0f  max %.0f\n", pct(ms, 0.5), pct(ms, 0.95), pct(ms, 1.0));
+        std::printf("play mesh: collision triangles p50 %.0f  p95 %.0f  max %.0f (the game's pool 8191); pieces max %.0f (64); steepest walkable "
+                    "deck facet p95 %.1f  max %.1f deg; largest slope change a station p95 %.3f  max %.3f\n", pct(pmT, 0.5), pct(pmT, 0.95),
+                    pct(pmT, 1.0), pct(pmP, 1.0), pct(pmS, 0.95), pct(pmS, 1.0), pct(pmC, 0.95), pct(pmC, 1.0));
         std::printf("validator flags per module (all candidates, before repair):");
         for (auto& kv : failures) std::printf("  %s %d", kv.first.c_str(), kv.second);
         std::printf("\nmodule usage in final courses:");

@@ -145,20 +145,6 @@ PlayMesh buildPlayMesh(const GenResult& r, const ModuleLibrary& lib, const GenPa
             k += len + 1;
         }
     }
-    // an upward step steeper than maxRiseSlope is spread backwards into a ramp
-    {
-        const double rise = pp.maxRiseSlope * c.sk.stepM;
-        std::vector<uint8_t> raised(N, 0);
-        for (int pass = 0; pass < 4 * N; ++pass) {
-            bool changed = false;
-            for (int j = N - 1; j >= 0; --j) {
-                const int jn = (j + 1) % N;
-                if (z[jn] - z[j] > rise + 1e-9) { z[j] = z[jn] - rise; raised[j] = 1; changed = true; }
-            }
-            if (!changed) break;
-        }
-        for (int j = 0; j < N; ++j) m.raisedStations += raised[j];
-    }
     // per station: kind, half width, the plan frame
     std::vector<PlayKind> kind(N, PlayKind::Road);
     std::vector<double> hw(N);
@@ -171,6 +157,135 @@ PlayMesh buildPlayMesh(const GenResult& r, const ModuleLibrary& lib, const GenPa
         P[j] = c.sk.pts[j];
         T[j] = (c.sk.pts[(j + 1) % N] - c.sk.pts[(j + N - 1) % N]).norm();
         Nn[j] = T[j].perp();
+    }
+    // The walkway narrows gently where a road meets a rail strip (pp.widthRateU a station on each side):
+    // a step from 12 to 7 units in one station made walls converging at 51 degrees, a corner Sonic stuck in.
+    {
+        const double rate = pp.widthRateU * mpu;
+        for (int pass = 0; pass < N; ++pass) {
+            bool changed = false;
+            for (int j = 0; j < N; ++j) {
+                const double lim = std::min(hw[(j + N - 1) % N], hw[(j + 1) % N]) + rate;
+                if (hw[j] > lim + 1e-12) { hw[j] = lim; changed = true; }
+            }
+            if (!changed) break;
+        }
+    }
+    // Each segment's effective run: the rise between two stations over it is the slope of the steepest
+    // deck facet (lanes below). A facet with two corners on one station and one on the other rises dz over
+    // the plan distance from the lone corner to the line through the pair, so the steepest facet's slope
+    // is dz / run with run the shortest such distance. On a bend that is the inside (the same rise over a
+    // shorter run: at the Frame's spring ramp the inner edge was 0.56 for 0.45 at the centreline, and its
+    // full-width sliver triangles 34 degrees); where the width changes, the skewed lanes.
+    // (fewer lanes on a very long course: the game caches every piece near Sonic in a pool of 8191 triangles)
+    int lanes = std::max(1, pp.deckLanes);
+    while (lanes > 1 && (size_t)N * (4 * lanes + 4) > (size_t)pp.maxCollisionTriangles) --lanes;
+    m.lanes = lanes;
+    std::vector<double> run(N);
+    {
+        auto lineDist = [](Vec2 p, Vec2 a, Vec2 b) {
+            const Vec2 d = b - a;
+            const double l = d.len();
+            return l > 1e-12 ? std::fabs(d.x * (p.y - a.y) - d.y * (p.x - a.x)) / l : (p - a).len();
+        };
+        auto lp = [&](int j, int k) { return P[j] + Nn[j] * (hw[j] * (1.0 - 2.0 * k / lanes)); };
+        for (int j = 0; j < N; ++j) {
+            const int jn = (j + 1) % N;
+            double rmin = c.sk.stepM;
+            for (int k = 0; k < lanes; ++k) {
+                const Vec2 A = lp(j, k), B = lp(j, k + 1), C = lp(jn, k + 1), D = lp(jn, k);
+                rmin = std::min({rmin, lineDist(C, A, B), lineDist(A, C, D)});   // the facets (A B C) and (A C D)
+            }
+            run[j] = std::max(1e-4, rmin);
+        }
+    }
+    // Drops (a downward step steeper than pp.dropSlope, a Drop module's lip) stay sharp: the smoothing
+    // below never averages across one.
+    std::vector<uint8_t> drop(N, 0);
+    for (int j = 0; j < N; ++j) drop[j] = z[(j + 1) % N] - z[j] < -pp.dropSlope * run[j];
+    // What the shaping keeps: decks the generator set on a furniture top stay on it (but for pp.boxSinkM where
+    // they ease off its edge: held exactly, the edge was a crest of up to 35 degrees), and where one deck
+    // passes over another the gap stays the generator's (or pp's layer gap, the smaller).
+    const std::vector<double> z0 = z;
+    std::vector<double> lo(N, -1e9);
+    for (int j = 0; j < N; ++j)
+        for (auto& b : r.room.boxes)
+            if (b.rect.contains(P[j]) && z0[j] >= b.height - 1e-6) lo[j] = std::max(lo[j], b.height - pp.boxSinkM);
+    struct Over { int up, low; double gap; };
+    std::vector<Over> over;
+    const double layerGap = gp.layerGapU * mpu;
+    for (int j = 0; j < N && j < (int)c.sk.partners.size(); ++j)
+        for (int q : c.sk.partners[j])
+            if (z0[j] > z0[q] + 1e-6) over.push_back({j, q, std::min(z0[j] - z0[q], layerGap)});
+    std::vector<uint8_t> raised(N, 0);
+    // A step steeper than maxRiseSlope (on its shortest edge) becomes a ramp: upward spread backwards, and
+    // downward (Sonic runs both ways: head-relative steering) spread forwards, except a drop. Both only raise.
+    auto riseLimit = [&](bool count) {
+        for (int pass = 0; pass < 4 * N; ++pass) {
+            bool changed = false;
+            for (int j = N - 1; j >= 0; --j) {
+                const int jn = (j + 1) % N;
+                const double rise = pp.maxRiseSlope * run[j];
+                if (z[jn] - z[j] > rise + 1e-9) { z[j] = z[jn] - rise; if (count) raised[j] = 1; changed = true; }
+            }
+            for (int j = 0; j < N; ++j) {
+                const int jn = (j + 1) % N;
+                const double fall = pp.maxFallSlope * run[j];
+                if (!drop[j] && z[j] - z[jn] > fall + 1e-9) { z[jn] = z[j] - fall; if (count) raised[jn] = 1; changed = true; }
+            }
+            if (!changed) break;
+        }
+    };
+    auto keep = [&]() {
+        for (int j = 0; j < N; ++j) z[j] = std::max(z[j], lo[j]);
+        for (const Over& o : over)
+            if (z[o.up] - z[o.low] < o.gap) z[o.up] = z[o.low] + o.gap;
+    };
+    riseLimit(true);
+    // The vertical profile smoothed: a box filter over 2 h + 1 stations, pp.smoothPasses times (about a
+    // Gaussian), so slopes change gradually instead of in one station. A crease of 24 degrees in one
+    // station (the top of a spring ramp) threw Sonic off as a ledge; a sag stopped him as a step. A box
+    // filter keeps a straight ramp straight and a plateau level, and never makes a slope steeper than the
+    // steepest it averages; the drops above bound its windows.
+    {
+        const int h = std::max(0, pp.smoothHalfStations);
+        std::vector<double> zn(N);
+        for (int pass = 0; pass < pp.smoothPasses && h > 0; ++pass) {
+            for (int j = 0; j < N; ++j) {
+                double s = z[j];
+                int n = 1;
+                for (int k = 1; k <= h; ++k) { const int i = (j - k + N) % N; if (drop[i]) break; s += z[i]; ++n; }
+                for (int k = 1; k <= h; ++k) { if (drop[(j + k - 1) % N]) break; s += z[(j + k) % N]; ++n; }
+                zn[j] = s / n;
+            }
+            z = zn;
+            keep();
+            riseLimit(false);
+        }
+        // where the limits cut back in (a valley's ramps raised to the limit meet in a V), smoothed locally
+        // again, until the slope changes by at most pp.maxCreaseSlope a station or nothing more gives (a crest
+        // a limit holds up, a deck over a crossing, stays as sharp as the limit makes it)
+        const double stepM = c.sk.stepM;
+        for (int it = 0; it < (pp.smoothPasses > 0 ? 200 : 0); ++it) {
+            const std::vector<double> before = z;
+            for (int j = 0; j < N; ++j) {
+                const int jp = (j + N - 1) % N, jn = (j + 1) % N;
+                if (drop[jp] || drop[j]) { zn[j] = z[j]; continue; }
+                const double cr = ((z[jn] - z[j]) - (z[j] - z[jp])) / stepM;
+                zn[j] = std::fabs(cr) > pp.maxCreaseSlope ? (z[jp] + 2 * z[j] + z[jn]) / 4 : z[j];
+            }
+            z = zn;
+            for (int k = 0; k < 16; ++k) {   // until both hold (each only raises)
+                const std::vector<double> b2 = z;
+                keep();
+                riseLimit(false);
+                if (z == b2) break;
+            }
+            if (z == before) break;
+        }
+    }
+    for (int j = 0; j < N; ++j) m.raisedStations += raised[j];
+    for (int j = 0; j < N; ++j) {
         m.bridgedStations += bridged[j];
         m.railStations += kind[j] == PlayKind::Rail;
         PlayStation s;
@@ -179,33 +294,64 @@ PlayMesh buildPlayMesh(const GenResult& r, const ModuleLibrary& lib, const GenPa
         s.halfW = hw[j];
         s.kind = kind[j];
         s.bridged = bridged[j] != 0;
+        s.held = z[j] <= lo[j] + 1e-9 ? 1 : 0;
+        for (const Over& o : over) if (o.up == j && z[j] - z[o.low] <= o.gap + 1e-9) s.held = 2;
         m.st.push_back(s);
     }
     auto at = [&](int j, double side, double up) {   // side + to the left (metres from the centreline), up from the deck
         return Vec3{P[j].x + Nn[j].x * side, P[j].y + Nn[j].y * side, z[j] + up};
     };
+    // The deck across its width in pp.deckLanes lanes, the same fractions of the half width at every
+    // station, so neighbouring segments (and modules of other widths) share their edge vertices exactly.
+    // A bend's ramp is a twisted surface (its inner edge steeper than its outer): one quad across the full
+    // width folded along its diagonal into two facets 10 degrees apart, and Sonic lost the ground there.
+    auto lane = [&](int j, int k, double up = 0) { return at(j, hw[j] * (1.0 - 2.0 * k / lanes), up); };   // k = 0 the left edge
     // collision: the deck, its underside and both walls, chunked. The underside (facing down, the deck's
     // thickness below it) is a ceiling: without it the game let Sonic through a deck from below and set
     // him on top of it (a jump under a bridge came out on the bridge; the Frame, 2026-11-21)
-    const double wallH = pp.wallHeightU * mpu, under = pp.deckThickU * mpu;
+    const double wallH = pp.wallHeightU * mpu, under = pp.undersideU * mpu;
     const int cs = std::max(4, pp.chunkStations);
+    // The triangles of a piece in order of their middle's Z, highest first. The game's collision cache
+    // (0x0048B610 via 0x004974F0) files each triangle at the head of a 16-unit band of Z, so a piece's
+    // chain runs in our reverse order inside a band, and its query (0x0048BAF0) walks that chain and stops
+    // at the first triangle past its Z window, as if the chain were sorted. Highest first makes it sorted.
+    auto finish = [&](PlayChunk&& ch) {
+        if (pp.sortForGame) {
+            const size_t nt = ch.tri.size() / 9;
+            std::vector<size_t> ord(nt);
+            for (size_t t = 0; t < nt; ++t) ord[t] = t;
+            auto midZ = [&](size_t t) { return ch.tri[9 * t + 2] + ch.tri[9 * t + 5] + ch.tri[9 * t + 8]; };
+            std::stable_sort(ord.begin(), ord.end(), [&](size_t a, size_t b) { return midZ(a) > midZ(b); });
+            std::vector<float> sorted;
+            sorted.reserve(ch.tri.size());
+            for (size_t t : ord) sorted.insert(sorted.end(), ch.tri.begin() + 9 * t, ch.tri.begin() + 9 * t + 9);
+            ch.tri.swap(sorted);
+        }
+        if (!ch.tri.empty()) m.chunks.push_back(std::move(ch));
+    };
     for (int s0 = 0; s0 < N; s0 += cs) {
-        PlayChunk ch;
-        ch.s0 = s0;
-        ch.s1 = std::min(N, s0 + cs);
+        PlayChunk ch, cw;
+        ch.s0 = cw.s0 = s0;
+        ch.s1 = cw.s1 = std::min(N, s0 + cs);
+        cw.walls = true;
         for (int j = ch.s0; j < ch.s1; ++j) {
             const int jn = (j + 1) % N;
-            const Vec3 L0 = at(j, hw[j], 0), R0 = at(j, -hw[j], 0), L1 = at(jn, hw[jn], 0), R1 = at(jn, -hw[jn], 0);
             const Vec3 L0h = at(j, hw[j], wallH), R0h = at(j, -hw[j], wallH), L1h = at(jn, hw[jn], wallH), R1h = at(jn, -hw[jn], wallH);
-            colQuad(ch, L0, R0, R1, L1);       // the deck, up
-            {
-                const Vec3 L0d = at(j, hw[j], -under), R0d = at(j, -hw[j], -under), L1d = at(jn, hw[jn], -under), R1d = at(jn, -hw[jn], -under);
-                colQuad(ch, L1d, R1d, R0d, L0d);   // its underside, down
+            for (int k = 0; k < lanes; ++k)    // the deck, up, lane by lane from the left
+                colQuad(ch, lane(j, k), lane(j, k + 1), lane(jn, k + 1), lane(jn, k));
+            for (int k = 0; k < lanes; ++k) {   // its underside, down: the deck's facets turned over (parallel to them)
+                const Vec3 A = lane(j, k, -under), B = lane(j, k + 1, -under), C = lane(jn, k + 1, -under), D = lane(jn, k, -under);
+                colTri(ch, A, C, B);
+                colTri(ch, A, D, C);
             }
-            colQuad(ch, L0, L1, L1h, L0h);     // the left wall, facing in
-            colQuad(ch, R1, R0, R0h, R1h);     // the right wall, facing in
+            {   // the walls, facing in
+                PlayChunk& w = pp.wallsApart ? cw : ch;
+                colQuad(w, at(j, hw[j], 0), at(jn, hw[jn], 0), L1h, L0h);     // the left wall
+                colQuad(w, at(jn, -hw[jn], 0), at(j, -hw[j], 0), R0h, R1h);   // the right wall
+            }
         }
-        m.chunks.push_back(std::move(ch));
+        finish(std::move(ch));
+        finish(std::move(cw));
     }
     // drawing
     Out o;
@@ -213,13 +359,10 @@ PlayMesh buildPlayMesh(const GenResult& r, const ModuleLibrary& lib, const GenPa
     for (int j = 0; j < N; ++j) {
         const int jn = (j + 1) % N;
         const Vec3 L0 = at(j, hw[j], 0), R0 = at(j, -hw[j], 0), L1 = at(jn, hw[jn], 0), R1 = at(jn, -hw[jn], 0);
-        if (kind[j] == PlayKind::Start) {   // a checkered start: two halves, alternating
-            const Vec3 M0 = at(j, 0, 0), M1 = at(jn, 0, 0);
-            const bool odd = j & 1;
-            o.quad(odd ? gStartA : gStartB, L0, M0, M1, L1);
-            o.quad(odd ? gStartB : gStartA, M0, R0, R1, M1);
-        } else {
-            o.quad(deckGroup(kind[j]), L0, R0, R1, L1);
+        for (int k = 0; k < lanes; ++k) {   // the drawn deck is the collision's, lane by lane
+            int g = deckGroup(kind[j]);
+            if (kind[j] == PlayKind::Start) g = ((j + (2 * k < lanes ? 0 : 1)) & 1) ? gStartA : gStartB;   // checkered halves
+            o.quad(g, lane(j, k), lane(j, k + 1), lane(jn, k + 1), lane(jn, k));
         }
         const Vec3 L0d = at(j, hw[j], -thick), R0d = at(j, -hw[j], -thick), L1d = at(jn, hw[jn], -thick), R1d = at(jn, -hw[jn], -thick);
         o.quad(gEdge, L1d, R1d, R0d, L0d);   // underside

@@ -435,3 +435,17 @@ See `host/xr/README.md`, "Fixes from the Frame's second test", and `docs/vr-game
   - `host/sa2_vr_hands.h` (version 10)
   - `host/sa2_stream.h` (`SA2S_MARK_SONIC_VIEW` 5)
   - `host/xr/xr_gpu.cpp`, `host/xr/README.md`, `docs/vr-game-hooks.md`
+
+## Frame feedback, round 3 (2026-11-21, `frame-modes3`)
+
+See `host/xr/README.md`, "Fixes from the Frame's third test", and `docs/vr-game-hooks.md` section 11.
+
+- **Put-back after a room visit "fell into the void":** Sonic landed on the street (the Frame's camera records show him standing at his saved spot), but the game camera carried itself by his 5000-unit drop and ended under the street, looking at its underside. vr-sonic now holds the camera (its location and the camera's own work at `0x01DCFF0C`) at the camera saved when he was taken, for 3 updates after every put-back, and keeps his saved spot if he is taken again before a put-back has landed.
+- **Room Run ramps behaved as steps and ledges:** the collision walls shared their pieces with the decks (in the game, a wall touched on a slope sank him half a unit into the deck without ground), one-station creases (up to 24 degrees), full-width twisted quads on bends (34-degree slivers) and abrupt width changes. `buildPlayMesh` now puts the walls in pieces of their own, smooths the profile, limits slopes on the steepest facet, splits the deck into 2 lanes, narrows the walkway gradually, and sorts each piece's triangles by Z for the game's collision cache.
+- **Root repo:** `roomrun/src/playmesh.cpp`, `roomrun/include/roomrun/playmesh.hpp`, `roomrun/tests/test_main.cpp`, `roomrun/tools/roomrun_batch.cpp` (a play-mesh summary line), `roomrun/examples/batch_1000.txt`. The generator's own output is unchanged.
+- **OpenSA2 files:**
+  - `runtime/tweaks/vr-sonic.c`
+  - `host/xr/xr_gpu.cpp` (the `k` test-hand frame; stick-down runs back along the course under track steering), `host/xr/xr_roomrun.cpp` (two diagnostics)
+  - `host/xr/README.md`, `docs/vr-game-hooks.md`
+  - No other upstream file.
+- **Checks:** roomrun tests pass; 1000-room batch identical to before apart from timing, plus the play-mesh line; test_tweaks 137 passed; test_stream 147 passed; public check 0 failures; flat `SA2_SELFTEST_OK` (menu at tick 3577).
