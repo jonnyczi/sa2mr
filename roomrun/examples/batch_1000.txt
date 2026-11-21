@@ -11,9 +11,9 @@ average lap s  p5 3.5  p50 12.1  p95 23.7
 bad lap s      p5 3.8  p50 12.7  p95 26.0
 repairs: 139 total, 132 courses needed >=1 repair round
 final validation (32 runs x 3 laps per course): catch-net respawns 10541 in 531 courses; no-net falls (checkpoint restart) 0 in 0 courses
-gen time ms    p50 217  p95 754  max 1268
+gen time ms    p50 208  p95 704  max 1136
 play mesh: collision triangles p50 3048  p95 5952  max 6996 (the game's pool 8191); pieces max 40 (64); steepest walkable deck facet p95 36.5  max 36.9 deg; largest slope change a station p95 0.080  max 0.686
-game objects: rings a course p5 18  p50 43  p95 77 (0 courses without); springs 2812 of 2891 spring modules (79 flights left out); dash panels 2139; dash ramps 122 (0 left out); grind rails 4075 (39 too steep: strip only)
+game objects: rings a course p5 17  p50 41  p95 72 (0 courses without); springs 2846 of 2891 spring modules (79 flights left out); dash panels 2154; dash ramps 122 (0 left out); grind rails 5154 (0 too steep: strip only)
 validator flags per module (all candidates, before repair):  dash_panel 1  drop 3  gap_jump 4  grind_rail 7  homing_chain 426  loop 4  ramp 64  spring 13  track 45
 module usage in final courses:  accel_pad 778  dash_panel 1361  drop 27  gap_jump 122  grind_rail 4117  homing_chain 1523  loop 1739  ramp 2821  spring 2891  start_line 1000  track 6668
 
@@ -27,9 +27,9 @@ average lap s  p5 1.0  p50 5.7  p95 13.8
 bad lap s      p5 1.1  p50 6.0  p95 15.0
 repairs: 35 total, 35 courses needed >=1 repair round
 final validation (32 runs x 3 laps per course): catch-net respawns 4390 in 273 courses; no-net falls (checkpoint restart) 0 in 0 courses
-gen time ms    p50 51  p95 274  max 437
+gen time ms    p50 52  p95 256  max 415
 play mesh: collision triangles p50 1716  p95 3708  max 5088 (the game's pool 8191); pieces max 28 (64); steepest walkable deck facet p95 35.7  max 36.9 deg; largest slope change a station p95 0.080  max 0.537
-game objects: rings a course p5 6  p50 24  p95 49 (0 courses without); springs 1347 of 1361 spring modules (14 flights left out); dash panels 1303; dash ramps 1 (0 left out); grind rails 4109 (4 too steep: strip only)
+game objects: rings a course p5 11  p50 23  p95 45 (0 courses without); springs 1496 of 1361 spring modules (14 flights left out); dash panels 1384; dash ramps 1 (0 left out); grind rails 3544 (0 too steep: strip only)
 validator flags per module (all candidates, before repair):  grind_rail 2  homing_chain 111  loop 3  ramp 7  spring 3  track 15
 module usage in final courses:  accel_pad 509  dash_panel 794  drop 4  gap_jump 1  grind_rail 4129  homing_chain 649  loop 773  ramp 906  spring 1361  start_line 1000  track 4901
 

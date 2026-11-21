@@ -426,7 +426,14 @@ static void checkObjects(const GenResult& r, const ModuleLibrary& lib, const Gen
     int sm = 0;
     for (auto& m : r.course.mods) sm += m.kind == Kind::Spring;
     *springMods += sm;
-    CHECK(co.stats.springs + co.stats.springsDropped == sm);
+    CHECK(co.stats.springs - co.stats.hopSprings + co.stats.springsDropped == sm);
+    CHECK(co.stats.springs >= 1);                     // variety: a spring on every course (a hop spring where no module has one)
+    for (auto& o : co.objs) CHECK(o.kind != ObjKind::Hunter);   // GUN Hunters off by default
+    {   // the grind paths over the decks, joined and over road, cover a good share of the course
+        int under = 0;
+        for (auto& rl : co.rails) under += rl.s1 - rl.s0;
+        CHECK(under == co.stats.grindStations);
+    }
     *springs += co.stats.springs;
     *rings += co.stats.rings;
     for (auto& o : co.objs) {
@@ -473,7 +480,7 @@ static void testObjects() {
         checkObjects(r, lib, gp, &rings, &springs, &springMods);
         courses++;
     }
-    std::printf("  objects: %d courses, %d rings, %d of %d springs kept\n", courses, rings, springs, springMods);
+    std::printf("  objects: %d courses, %d rings, %d springs (%d spring modules; hop springs added where none)\n", courses, rings, springs, springMods);
     CHECK(rings >= courses * 6);
     CHECK(springs * 2 >= springMods);   // most planned spring flights survive the game-physics check
 }

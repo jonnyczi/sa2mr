@@ -66,6 +66,8 @@ struct GenParams {
     double maxLapSeconds = 90.0;
     bool debug = false;          // print per-candidate diagnostics to stderr
     std::string preferSkeleton;  // optional: bias selection toward perimeter/figure8/helix/circle
+    double railShareMax = 0.35;  // rail stations beyond this share of the course cost railExcessCost a 10 stations
+    double railExcessCost = 0.0;   // off: in small rooms the bends need the rails (a cost there traded a figure-8 for a 1.7 m circle)
     Physics physics;
 };
 

@@ -20,6 +20,7 @@ struct Node {
     int lastKind = -1;
     int lastCls = -1;
     int lastDef = -1;
+    int railSt = 0;   // rail stations so far
 };
 
 // Sparse table for range-max of |curvature| (cyclic range never needed: modules stay in [0,N)).
@@ -213,12 +214,18 @@ private:
         bool combo = par.lastKind == (int)Kind::Dash && (d.kind == Kind::Gap || d.kind == Kind::Loop || d.kind == Kind::Drop);
         if (setPiece && prevSet && !combo) sc -= 0.5;
         if (rem < 30) sc -= 0.5 * std::fabs(m.h1 - hStart_) / 0.1;
+        // variety over long rail runs (the Frame, 2026-11-21: a 2 x 2 m course came out 78% rail): rail beyond
+        // gp_.railShareMax of the course costs, so road (where springs, panels and enemies go) wins where it fits
+        const int railAfter = par.railSt + (d.kind == Kind::Rail ? n : 0);
+        if (d.kind == Kind::Rail && railAfter > gp_.railShareMax * N_)
+            sc -= gp_.railExcessCost * (railAfter - std::max((double)par.railSt, gp_.railShareMax * N_)) / 10.0;
         c.score = par.score + sc;
         c.used = par.used | bit;
         std::copy(par.count, par.count + 16, c.count);
         if (c.count[(int)d.kind] < 255) c.count[(int)d.kind]++;
         c.lastKind = (int)d.kind;
         c.lastDef = defIdx;
+        c.railSt = par.railSt + (d.kind == Kind::Rail ? n : 0);
         c.lastCls = d.kind == Kind::Drop ? (int)MClass::Mover : (int)d.cls;
         push(std::move(c));
     }

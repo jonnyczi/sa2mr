@@ -466,3 +466,12 @@ See `host/xr/README.md`, "Room Run objects", `docs/vr-roomrun-objects.md` sectio
   - `host/xr/README.md`, `docs/vr-roomrun-objects.md`, `docs/vr-game-hooks.md`
   - No other upstream file.
 - **Checks:** roomrun tests pass (15036 checks); 1000-room batch identical apart from timing, plus the objects line; test_tweaks 137 passed; test_stream 147 passed; `TEST_D3D9GPU_OK` 5445; flat `SA2_SELFTEST_OK` (menu at tick 3582); `RELEASE_BUILD_OK`, `XR_BUILD_OK`.
+
+## Room Run, round 2 (2026-11-21, Frame test `frame-rrobj1`)
+
+See `host/xr/README.md`, "Room Run, round 2", and `docs/vr-roomrun-objects.md` section 9.
+
+- **What:** variety on small courses (hop springs, added dash panels), enemies on by default (Beetles only), grind paths 7 units up with no assist and more of them, throwing Sonic (room and window), held Sonic turning with the hand, the course leaving the room with Sonic (put-back, restart, menus, view change).
+- **Root repo:** `roomrun/src/objects.cpp`, `roomrun/include/roomrun/objects.hpp` (variety, enemies, rails, `grindRailGroup`), `roomrun/src/assembler.cpp` and `roomrun/include/roomrun/params.hpp` (a rail-share cost, off), `roomrun/tests/test_main.cpp`, `roomrun/tools/roomrun_batch.cpp` (`--variety`), `roomrun/examples/batch_1000.txt`, new `roomrun/examples/variety_500.txt`.
+- **OpenSA2 files:** `runtime/tweaks/vr-sonic.c` (no assist, throws, hand yaw, view-change put-back, `course_shown`), `host/sa2_vr_hands.h` (version 11), `host/xr/xr_gpu.cpp`, `host/xr/xr_roomrun.cpp`, `host/xr/README.md`, `docs/vr-roomrun-objects.md`. No other upstream file.
+- **Checks:** roomrun tests (16345 checks); 1000-room batch: generation unchanged, objects line changed (more grind rails, springs now include hop springs); test_tweaks 137; test_stream 147; public check 0 failures; flat `SA2_SELFTEST_OK` (menu at tick 3580); `RELEASE_BUILD_OK`, `XR_BUILD_OK`.

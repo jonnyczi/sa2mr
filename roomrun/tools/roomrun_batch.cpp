@@ -46,6 +46,7 @@ int main(int argc, char** argv) {
     int rooms = 1000, threads = (int)std::max(1u, std::thread::hardware_concurrency());
     uint64_t seed = 12345;
     std::string csv, dumpDir;
+    int variety = 0;   // --variety N: the game objects' mix on N courses for each of the VR player's play-area sizes
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
         auto next = [&]() { return i + 1 < argc ? std::string(argv[++i]) : std::string(); };
@@ -54,7 +55,51 @@ int main(int argc, char** argv) {
         else if (a == "--threads") threads = std::atoi(next().c_str());
         else if (a == "--csv") csv = next();
         else if (a == "--dump-fallbacks") dumpDir = next();
+        else if (a == "--variety") variety = std::atoi(next().c_str());
         else { std::fprintf(stderr, "usage: roomrun-batch --rooms N [--seed S] [--threads T] [--csv f]\n"); return 2; }
+    }
+    if (variety > 0) {
+        // The VR player's rooms: a play area under 2 x 2 m becomes a 2 x 2 m course about its centre with the user
+        // inside the play area (0.3 m kept free below 2.5 m, else 0.7), Sonic 12 cm (host/xr README "Room Run v0").
+        struct Area { const char* name; double w, d, uw, ud; };
+        const Area areas[] = {{"1 x 1 m", 2.0, 2.0, 0.4, 0.4}, {"2 x 2 m", 2.0, 2.0, 0.8, 0.8}, {"3 x 2.5 m", 3.0, 2.5, 0.9, 0.7}};
+        std::printf("Room Run game objects: the share of courses with each, %d seeds and user spots a play area (Sonic 12 cm)\n", variety);
+        for (const Area& a : areas) {
+            GenParams gp;
+            gp.sonicHeightM = 0.12;
+            const ModuleLibrary lib = ModuleLibrary::builtin(gp.speedScale);
+            std::atomic<int> next{0};
+            std::mutex mu;
+            int ok = 0, spring = 0, hop = 0, dash = 0, ramp = 0, enemy = 0, rail = 0, ring = 0, all = 0;
+            double grind = 0;
+            auto work = [&]() {
+                for (int i; (i = next.fetch_add(1)) < variety;) {
+                    Rng rng(seed * 7919ull + (uint64_t)i);
+                    Room room;
+                    room.floor = {{-a.w / 2, -a.d / 2}, {a.w / 2, -a.d / 2}, {a.w / 2, a.d / 2}, {-a.w / 2, a.d / 2}};
+                    room.player = {rng.range(-a.uw, a.uw), rng.range(-a.ud, a.ud)};
+                    room.playerRadius = a.w < 2.5 || a.d < 2.5 ? 0.3 : 0.7;
+                    const GenResult r = generateCourse(room, (uint64_t)i + 1, gp, lib);
+                    if (!r.ok) continue;
+                    const PlayMesh pm = buildPlayMesh(r, lib, gp);
+                    const CourseObjects co = placeObjects(r, pm, lib, gp);
+                    const ObjectStats& s = co.stats;
+                    std::lock_guard<std::mutex> g(mu);
+                    ok++; spring += s.springs > 0; hop += s.hopSprings > 0; dash += s.dashPanels > 0; ramp += s.dashRamps > 0;
+                    enemy += s.enemies > 0; rail += s.rails > 0; ring += s.rings > 0;
+                    all += s.springs > 0 && s.dashPanels > 0 && s.enemies > 0 && s.rails > 0 && s.rings > 0;
+                    grind += (double)s.grindStations / pm.st.size();
+                }
+            };
+            std::vector<std::thread> th;
+            for (int t = 0; t < threads; ++t) th.emplace_back(work);
+            for (auto& t : th) t.join();
+            const double k = 100.0 / std::max(1, ok);
+            std::printf("%-9s courses %d of %d: springs %.0f%% (a hop spring added in %.0f%%), dash panels %.0f%%, dash ramps %.0f%%, enemies %.0f%%, "
+                        "grind rails %.0f%% (%.0f%% of the course under one on average), rings %.0f%%; all of springs, panels, enemies, rails and "
+                        "rings %.0f%%\n", a.name, ok, variety, spring * k, hop * k, dash * k, ramp * k, enemy * k, rail * k, grind * k, ring * k, all * k);
+        }
+        return 0;
     }
     const double scales[] = {0.10, 0.15};
     std::vector<Row> rows((size_t)rooms * 2);

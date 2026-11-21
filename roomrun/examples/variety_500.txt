@@ -1,0 +1,4 @@
+Room Run game objects: the share of courses with each, 500 seeds and user spots a play area (Sonic 12 cm)
+1 x 1 m   courses 500 of 500: springs 100% (a hop spring added in 23%), dash panels 95%, dash ramps 0%, enemies 91%, grind rails 100% (42% of the course under one on average), rings 100%; all of springs, panels, enemies, rails and rings 91%
+2 x 2 m   courses 500 of 500: springs 100% (a hop spring added in 11%), dash panels 99%, dash ramps 0%, enemies 97%, grind rails 100% (38% of the course under one on average), rings 100%; all of springs, panels, enemies, rails and rings 97%
+3 x 2.5 m courses 500 of 500: springs 100% (a hop spring added in 8%), dash panels 100%, dash ramps 0%, enemies 100%, grind rails 100% (38% of the course under one on average), rings 100%; all of springs, panels, enemies, rails and rings 100%

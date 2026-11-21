@@ -132,6 +132,8 @@ Read `external/OpenSA2/host/xr/README.md` first. It holds the measured camera fi
   - **Restart frees the SET objects but not rail path tasks.** Grind speed assist `SA2_VR_RR_RAIL_MIN` (2.0) or a slow climbing rail traps him.
   - **Test:** scratchpad `rr_obj.sh` (5 × 4 m, seed 4; `ST` drop station, `BACK` put-back, `PAD` pad steps, `STICK2` a second stick range; the stick must be released before pause-menu steps). Evidence lines: `room run objects: rings A -> B`, `action 1 -> 7 ... from the spring`, `flight from ... landed`, `dash panel at station`, `Sonic grinding`, `is gone (destroyed)`, `after the removal: 0`.
 
+- **Room Run round 2 (2026-11-21).** README "Room Run, round 2". No grind assist; throws (`sonic_cmd_vel`, channel version 11; `SA2_XR_THROW_*`), held Sonic turns with the hand (`SA2_XR_SONIC_HOLD_TURN`), the course drawn only while `course_shown` (put-back, restart, menus and view changes take it away; a view change puts Sonic back). Test: scratchpad `rr2.sh` (the Frame's 2 × 2 m case; `HANDS` steps `time@hand:frame:x,y,z:grip`, `TURN`, `STICKS`, `PAD`). Pause-menu masks: Start 0x0010, Down 0x0002, Up 0x0001, A 0x1000, Left 0x0004 (Up from the top is EXIT).
+
 ## Frame performance (measured 2026-11-21)
 - Seated VR with about 1,090 world draws: 59.9 fps.
 - With `vr-level-culling` (radius 3000, about 1,780 world draws, so about 3,560 GPU draws after per-eye doubling): about 49–52 fps. Temperature is 75 °C, so it is CPU per-draw cost, not thermal.

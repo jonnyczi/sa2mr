@@ -47,12 +47,22 @@ struct CourseRail {
     std::vector<Vec3> pts;   // the grind path (metres): the rail strip's centreline, railHeightU above its deck
     int s0 = 0, s1 = 0;      // its stations [s0, s1)
     double riseU = 0;        // its largest climb above its start (units)
+    bool overRoad = false;   // a grind path of its own over road (not over a rail strip)
 };
 
 struct ObjectParams {
     bool rings = true, springs = true, dashPanels = true, dashRamps = true, rails = true;
-    double enemiesPerM = 0.0;    // GUN Beetles / Hunters on flat road (0: none, the default)
-    int enemyMax = 4;
+    double enemiesPerM = 0.25;   // enemies a metre of course on flat road, away from landings, rails and springs
+    int enemyMax = 3;
+    int enemyMin = 1;            // at least this many where a safe spot exists (a course of 2.5 m or more)
+    double hunterShare = 0.0;    // the share of GUN Hunters (their shots killed toy Sonic: none by default); the rest GUN Beetles
+    double beetleHeightU = 20.0; // a Beetle hovers this far above the deck: he runs under it and jumps to attack
+    bool ensureVariety = true;   // a course without a spring module gets a hop spring on its road, one without a dash
+                                 // module a dash panel (Frame test 2026-11-21: a 2 x 2 m course had rings only)
+    double hopApexU = 12.0;      // a hop spring's apex
+    int hopMinStations = 6, hopMaxStations = 10;   // its landing, stations ahead
+    double smallDashU = 6.0;     // the added dash panel's speed and no-control frames
+    int smallDashLock = 24;
     double ringHeightU = 6.0;    // a ring's centre above the deck
     double ringSpacingU = 16.0;  // a line's spacing (the game's RING_LINEAR: scale.x + 10)
     int ringLineMax = 6;         // rings in a line (the game clamps 1..8)
@@ -60,9 +70,13 @@ struct ObjectParams {
     double straightTolU = 3.0;   // a ring line's straightness: every station within this of its chord
     double ringCircleRadiusU = 10.0;
     int ringCircleCount = 8;
-    double railHeightU = 1.5;    // the grind path above the strip's deck
-    double railMaxRiseU = 40.0;  // a rail climbing more than this above its start gets no grind path (the
-                                 // game's rail slows him uphill and slides him back: v^2 / 2g at 4 u/f is 100)
+    double railHeightU = 7.0;    // the grind path above the deck: out of reach running (the game grinds within 4 units,
+                                 // 6.5 with a no-control timer), reached by a jump; off it, the strip or road below runs
+    double railMaxRiseU = 1e9;   // no limit: the player finds his own way up (no assist; he can always jump off)
+    int railJoinStations = 6;    // rail runs this close are one grind path (over the road between)
+    double railTargetShare = 0.35;  // grind paths over road too, until this share of the stations is under one
+    int roadRailMinStations = 14;   // a road stretch for a grind path of its own (3 stations kept clear at each end)
+    double railBarU = 1.6;       // the drawn grind bar's thickness (units)
     // the game's air physics (measured in OpenSA2 on a spring's flight: docs/vr-roomrun-objects.md)
     double gravityU = 0.08;      // units a frame^2
     double airDrag = 0.01;       // the velocity's loss a frame in the air (vertical, measured; horizontal assumed the same)
@@ -78,6 +92,7 @@ struct ObjectParams {
 struct ObjectStats {
     int rings = 0, ringLines = 0, ringCircles = 0, springs = 0, dashPanels = 0, dashRamps = 0, enemies = 0, rails = 0;
     int railStations = 0;
+    int hopSprings = 0, addedDash = 0, roadRails = 0, grindStations = 0;   // the variety added; stations under a grind path
     int springsDropped = 0, rampsDropped = 0, railsDropped = 0;   // left out by the checks (the bridge / strip remains)
     std::vector<std::string> notes;                                // why each was left out
 };
@@ -104,6 +119,9 @@ struct FlightCheck {
 };
 FlightCheck checkFlight(const PlayMesh& pm, const Vec3& from, const Vec3& vU, int fromStation, int maxAheadStations,
                         const ObjectParams& op, bool sample = false, int holdFrames = 0, double drag = -1);
+
+// The grind paths drawn: a bar along each and posts down to the deck (the course's own art; metres, Y up).
+PlayGroup grindRailGroup(const CourseObjects& co, double mpu, const ObjectParams& op = ObjectParams());
 
 // A summary line ("12 rings in 3 lines and 1 circle, 1 spring, ...").
 std::string objectSummary(const CourseObjects& o);
