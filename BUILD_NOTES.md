@@ -350,3 +350,17 @@ Part B, single-pass stereo (`host/xr/README.md`, "Single-pass stereo"):
   - `sa2recomp --record-session`, then `--debug-export`, then `tools/s7/replay_export.py --release <xr release> --install /sa2 --env SA2_TWEAKS=practice-stage,... --env SA2_PRACTICE=13 --env SA2_REC_CAMERA=1` gives a deterministic stream.
   - `sa2_player_xr STREAM --hidden` with `SDL_VIDEO_DRIVER=offscreen` replays it unpaced.
 - **Checks:** `XR_BUILD_OK`, `D3D9GPU_BUILD_OK`, `TEST_D3D9GPU_OK 5445 checks`, `test_stream` 147 passed, flat `RELEASE_BUILD_OK` and `SA2_SELFTEST_OK` (offscreen; menu at tick 3577), `RELEASE_BUILD_ARM64_OK`.
+
+## Game-side performance (2026-11-21)
+
+See `host/xr/README.md`, "Game-side performance". Live x86, City Escape: stream 1.2–1.3 MB → 0.56–0.68 MB a frame, D3D9 calls −27%, game CPU about −30%.
+- **Upstream edits:**
+  - `host/sa2_present_rec.c`: redundant float constants left out of VR streams (`SA2_REC_DEDUPE`), and the integer stream-stats line. Both are on only with `SA2_REC_CAMERA=1`, so flat streams are unchanged.
+  - `host/launch/sa2_relay.{h,cpp}` and `sa2_launch.cpp`: the "relay perf" line (`SA2_RELAY_PERF`; on with `SA2_XR=1`).
+  - `tools/s5/objcheck.py` and `Documentation/scripts/tests/test_s5_stream.py`: `sa2_rec_draw_mark` (the earlier draw marks' entry point) is an allowed definition. The recorder object check had failed on it since the marks were added.
+- **Our files:** `runtime/tweaks/vr-level-culling.c` (the seated view cone, `SA2_VR_CULL_CONE`), `host/sa2_vr_hands.h` version 6 (`view_fwd`), `host/xr/xr_gpu.cpp` (`write_view_cone`).
+- **Checks:**
+  - `test_tweaks` 136 passed.
+  - `test_s5_stream.py` 277 passed; 14 fail on the build container's missing `zstd` binary, which is environmental.
+  - Recorder object check OK; flat `SA2_SELFTEST_OK` (menu at tick 3582).
+  - A deduplicated stream replays pixel-identical.
