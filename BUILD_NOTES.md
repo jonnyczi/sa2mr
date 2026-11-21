@@ -413,3 +413,25 @@ See `host/xr/README.md`, "Fixes from the Frame's first test of these modes", and
   - `host/xr/README.md`, `docs/vr-game-hooks.md`
   - No other upstream file.
 - **Checks:** test_tweaks 137 passed; public check 0 failures; flat `SA2_SELFTEST_OK` (menu at tick 3578). d3d9gpu and the player are not touched in this step.
+
+## Frame feedback, round 2 (2026-11-21, `frame-modes2`)
+
+See `host/xr/README.md`, "Fixes from the Frame's second test", and `docs/vr-game-hooks.md` section 10.
+
+- **First person:**
+  - The right stick turns smoothly.
+  - The eye is locked to his head at any speed: it is moved after Sonic_Main, and the head node is matched with the feet at that display.
+  - On the board the eye is at the head's own eye point (its up and face axes).
+- **2D window:** it keeps the live level while Sonic is out. The camera is held at the level, and his display is drawn from a view shifted next to him, which fixes the stretched legs.
+- **Putting him back:** he goes back where he is dropped on the window, onto the ground there, falling back to his saved spot. From the room, the floor goes first because of the ride.
+- **Room steering:** head-relative by default.
+- **Room Run:**
+  - He drops straight from the hand.
+  - The floor is ground.
+  - Course decks get an underside, a ceiling.
+- **Root repo:** `roomrun/src/playmesh.cpp` (the deck underside in the collision) and `roomrun/tests/test_main.cpp`, now 8 collision triangles per station. The roomrun tests pass.
+- **OpenSA2 files:**
+  - `runtime/tweaks/vr-sonic.c`
+  - `host/sa2_vr_hands.h` (version 10)
+  - `host/sa2_stream.h` (`SA2S_MARK_SONIC_VIEW` 5)
+  - `host/xr/xr_gpu.cpp`, `host/xr/README.md`, `docs/vr-game-hooks.md`

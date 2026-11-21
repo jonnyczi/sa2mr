@@ -110,6 +110,14 @@ Read `external/OpenSA2/host/xr/README.md` first. It holds the measured camera fi
   - **Scratchpad scripts:** `restart_test.sh` (toggles, Restart, stick).
   - **Open ground for path tests:** Metal Harbor (`STAGE=10`); City Escape's board section weaves by itself.
 
+- **Frame mode fixes, round 2 (2026-11-21).**
+  - **Frame order:** the game camera runs before Sonic in a frame. A first-person eye must be moved after Sonic_Main, through the view struct at `0x01DD00AC`.
+  - **Weighted skinning stretches with camera distance.** Draw his display from a shifted view (`SA2S_MARK_SONIC_VIEW`) when the camera is far.
+  - **Riders:** a player standing on a dynamic collision object is carried with it, so remove the object a few frames before teleporting him.
+  - **Room Run decks need an underside** (a ceiling); a one-sided deck lets him through from below.
+  - **Test hooks:** `SA2_XR_TEST_RSTICKS`, `SA2_XR_TEST_ROOM_RUN_USER` (0.02,0.05 with seed 3 gives a figure-8 with a bridge), `SA2_VR_POS_LOG=N`.
+  - **Never run two `run_vs.sh` at once:** they share and restore the release's `game.env`.
+
 ## Frame performance (measured 2026-11-21)
 - Seated VR with about 1,090 world draws: 59.9 fps.
 - With `vr-level-culling` (radius 3000, about 1,780 world draws, so about 3,560 GPU draws after per-eye doubling): about 49–52 fps. Temperature is 75 °C, so it is CPU per-draw cost, not thermal.

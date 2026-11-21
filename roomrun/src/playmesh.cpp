@@ -184,8 +184,10 @@ PlayMesh buildPlayMesh(const GenResult& r, const ModuleLibrary& lib, const GenPa
     auto at = [&](int j, double side, double up) {   // side + to the left (metres from the centreline), up from the deck
         return Vec3{P[j].x + Nn[j].x * side, P[j].y + Nn[j].y * side, z[j] + up};
     };
-    // collision: the deck and both walls, chunked
-    const double wallH = pp.wallHeightU * mpu;
+    // collision: the deck, its underside and both walls, chunked. The underside (facing down, the deck's
+    // thickness below it) is a ceiling: without it the game let Sonic through a deck from below and set
+    // him on top of it (a jump under a bridge came out on the bridge; the Frame, 2026-11-21)
+    const double wallH = pp.wallHeightU * mpu, under = pp.deckThickU * mpu;
     const int cs = std::max(4, pp.chunkStations);
     for (int s0 = 0; s0 < N; s0 += cs) {
         PlayChunk ch;
@@ -196,6 +198,10 @@ PlayMesh buildPlayMesh(const GenResult& r, const ModuleLibrary& lib, const GenPa
             const Vec3 L0 = at(j, hw[j], 0), R0 = at(j, -hw[j], 0), L1 = at(jn, hw[jn], 0), R1 = at(jn, -hw[jn], 0);
             const Vec3 L0h = at(j, hw[j], wallH), R0h = at(j, -hw[j], wallH), L1h = at(jn, hw[jn], wallH), R1h = at(jn, -hw[jn], wallH);
             colQuad(ch, L0, R0, R1, L1);       // the deck, up
+            {
+                const Vec3 L0d = at(j, hw[j], -under), R0d = at(j, -hw[j], -under), L1d = at(jn, hw[jn], -under), R1d = at(jn, -hw[jn], -under);
+                colQuad(ch, L1d, R1d, R0d, L0d);   // its underside, down
+            }
             colQuad(ch, L0, L1, L1h, L0h);     // the left wall, facing in
             colQuad(ch, R1, R0, R0h, R1h);     // the right wall, facing in
         }

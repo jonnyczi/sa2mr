@@ -244,7 +244,7 @@ static void checkPlayMesh(const GenResult& r, const ModuleLibrary& lib, const Ge
     for (auto& c : m.chunks) {
         CHECK(c.s1 - c.s0 <= pp.chunkStations && c.s1 > c.s0);
         stations += c.s1 - c.s0;
-        CHECK(c.tri.size() == (size_t)(c.s1 - c.s0) * 6 * 9);
+        CHECK(c.tri.size() == (size_t)(c.s1 - c.s0) * 8 * 9);   // per station: the deck, its underside, two walls
         for (size_t t = 0; t < c.tri.size() / 9; ++t) {
             const float* v = &c.tri[9 * t];
             const Vec3 a{v[0], v[1], v[2]}, b{v[3], v[4], v[5]}, cc{v[6], v[7], v[8]};
@@ -253,9 +253,10 @@ static void checkPlayMesh(const GenResult& r, const ModuleLibrary& lib, const Ge
             const double l = n.len();
             if (l < 1e-12) continue;
             const double ny = n.y / l;
-            const int j = c.s0 + (int)(t / 6), jn = (j + 1) % N;
+            const int j = c.s0 + (int)(t / 8), jn = (j + 1) % N;
             const bool drop = m.st[jn].p.y < m.st[j].p.y - 1e-6;   // a drop module's lip: steep, down only
-            if ((t % 6) < 2) badDeck += ny <= 0.0 || (ny < 0.5 && !drop);   // the deck faces up
+            if ((t % 8) < 2) badDeck += ny <= 0.0 || (ny < 0.5 && !drop);   // the deck faces up
+            else if ((t % 8) < 4) badDeck += ny >= 0.0 || (ny > -0.5 && !drop);   // its underside faces down (a ceiling)
             else badWall += std::fabs(ny) > 1e-3;         // the walls stand upright
             for (int k = 0; k < 3; ++k) outside += !pointInPolygon(r.room.floor, Vec2{v[3 * k], -v[3 * k + 2]});
         }
