@@ -10,6 +10,7 @@
 #include "roomrun/export.hpp"
 #include "roomrun/field.hpp"
 #include "roomrun/generator.hpp"
+#include "roomrun/playmesh.hpp"
 
 using namespace rr;
 
@@ -228,6 +229,77 @@ static void testTinyRoomRejected() {
     CHECK(!generateCourse(bad, 1, gp, lib).ok);
 }
 
+
+// The playable mesh (Room Run v0 in the game): continuous, walled, inside the room, deterministic.
+static void checkPlayMesh(const GenResult& r, const ModuleLibrary& lib, const GenParams& gp) {
+    PlayMeshParams pp;
+    PlayMesh m = buildPlayMesh(r, lib, gp, pp);
+    const int N = r.course.sk.size();
+    CHECK((int)m.st.size() == N);
+    const double rise = pp.maxRiseSlope * r.course.sk.stepM + 1e-6;
+    int steep = 0;
+    for (int j = 0; j < N; ++j) steep += m.st[(j + 1) % N].p.y - m.st[j].p.y > rise;
+    CHECK(steep == 0);
+    int stations = 0, badDeck = 0, badWall = 0, outside = 0;
+    for (auto& c : m.chunks) {
+        CHECK(c.s1 - c.s0 <= pp.chunkStations && c.s1 > c.s0);
+        stations += c.s1 - c.s0;
+        CHECK(c.tri.size() == (size_t)(c.s1 - c.s0) * 6 * 9);
+        for (size_t t = 0; t < c.tri.size() / 9; ++t) {
+            const float* v = &c.tri[9 * t];
+            const Vec3 a{v[0], v[1], v[2]}, b{v[3], v[4], v[5]}, cc{v[6], v[7], v[8]};
+            const Vec3 e1 = b - a, e2 = cc - a;
+            Vec3 n{e1.y * e2.z - e1.z * e2.y, e1.z * e2.x - e1.x * e2.z, e1.x * e2.y - e1.y * e2.x};
+            const double l = n.len();
+            if (l < 1e-12) continue;
+            const double ny = n.y / l;
+            const int j = c.s0 + (int)(t / 6), jn = (j + 1) % N;
+            const bool drop = m.st[jn].p.y < m.st[j].p.y - 1e-6;   // a drop module's lip: steep, down only
+            if ((t % 6) < 2) badDeck += ny <= 0.0 || (ny < 0.5 && !drop);   // the deck faces up
+            else badWall += std::fabs(ny) > 1e-3;         // the walls stand upright
+            for (int k = 0; k < 3; ++k) outside += !pointInPolygon(r.room.floor, Vec2{v[3 * k], -v[3 * k + 2]});
+        }
+    }
+    CHECK(stations == N);
+    CHECK(badDeck == 0);
+    CHECK(badWall == 0);
+    CHECK(outside == 0);
+    bool road = false, curb = false;
+    for (auto& g : m.groups) { road |= g.name == "road" && g.triangles() > 0; curb |= g.name == "curb_a" && g.triangles() > 0; }
+    CHECK(road && curb);
+    PlayMesh m2 = buildPlayMesh(r, lib, gp, pp);
+    CHECK(m2.chunks.size() == m.chunks.size() && m2.drawTriangles() == m.drawTriangles());
+    bool same = m2.chunks.size() == m.chunks.size();
+    for (size_t i = 0; same && i < m.chunks.size(); ++i) same = m.chunks[i].tri == m2.chunks[i].tri;
+    CHECK(same);
+}
+static void testPlayMesh() {
+    GenParams gp;
+    gp.sonicHeightM = 0.12;   // the VR player's default (SA2_XR_SONIC_SCALE 0.012 m a unit)
+    ModuleLibrary lib = ModuleLibrary::builtin(gp.speedScale);
+    // the play-area rectangles the VR player feeds it (centred, the user in the middle)
+    for (auto wh : {std::pair<double, double>{3.0, 2.5}, {4.0, 3.0}, {2.4, 2.4}, {5.0, 4.0}}) {
+        Room room;
+        const double w = wh.first / 2, h = wh.second / 2;
+        room.floor = {{-w, -h}, {w, -h}, {w, h}, {-w, h}};
+        room.player = {0, 0};
+        GenResult r = generateCourse(room, 1, gp, lib);
+        if (!r.ok) std::printf("  (no course for a %.1f x %.1f m play area: %s)\n", wh.first, wh.second, r.error.c_str());
+        CHECK(r.ok || wh.first < 2.5);   // a small area may refuse; the player then keeps the flat floor
+        if (r.ok) checkPlayMesh(r, lib, gp);
+    }
+    Rng rng(4242);
+    int ok = 0;
+    for (int i = 0; i < 24; ++i) {
+        Room room = randomRoom(rng, (RoomType)(i % 4));
+        GenResult r = generateCourse(room, 7, gp, lib);
+        if (!r.ok) continue;
+        ++ok;
+        checkPlayMesh(r, lib, gp);
+    }
+    CHECK(ok >= 20);
+}
+
 int main() {
     struct T { const char* name; std::function<void()> fn; };
     std::vector<T> tests = {
@@ -235,7 +307,7 @@ int main() {
         {"joins", testJoins},             {"determinism", testDeterminism},
         {"clearance+completion", testClearanceAndCompletion},
         {"fallback", testFallback},       {"tiny room", testTinyRoomRejected},
-        {"exports", testExports},
+        {"exports", testExports},         {"playable mesh", testPlayMesh},
     };
     for (auto& t : tests) {
         int before = gFailures;

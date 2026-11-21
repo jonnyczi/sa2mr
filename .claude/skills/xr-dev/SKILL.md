@@ -92,6 +92,11 @@ Read `external/OpenSA2/host/xr/README.md` first. It holds the measured camera fi
   - **Held Sonic's facing:** `SA2_XR_SONIC_FACE_OFF` is 180, measured. Judge from the side and the front.
   - **Don't hold the game camera far from Sonic** while his draws are relocated: his weighted legs stretch. The camera follows him onto the proxy floor.
   - **Script:** the scratchpad's `run_vs.sh` and `grab_w.sh`, under `monado_null.sh`, a private x9 Monado. Never `pkill monado-service`: the user's own Monado may be running.
+- **Room Run v0 (2026-11-21).** README "Room Run v0". `SA2_VR_ROOM_RUN=1` in game.env (the game publishes `room_run_on`, channel v8) or `SA2_XR_ROOM_RUN=1`; the drop out of the window becomes command 4 onto the course.
+  - Course frame: metres, Y up; room = A + R_yaw p, game = F + p / m (F from the game's `sonic_floor`). The generator runs on a worker thread at the window's first frame; the file `<SA2_VR_HANDS>.course` (`host/sa2_roomrun_course.h`) carries the collision to `vr-sonic`.
+  - Drawing: `Gloves::set_course` (its own vertex buffer), GloveDraw `course` = the colour group, drawn first (opaque, depth written) so shadows land on the deck.
+  - Track steering replaces the head's forward in `steer()` with the direction to the centreline 6 stations ahead.
+  - **Test:** scratchpad `rr_w.sh` (window grab + `SA2_VR_ROOM_RUN=1` + stick 0,1). Evidence lines: `room run: Sonic at station i of N ... above its deck`, `completed lap`. **The default test head (0,-1.15,0) is below the decks (0.4–1.4 m) and sees only pillars**: use `HEAD=-0.6,0.7,2.6 PITCH=-32` for an overview.
 
 ## Frame performance (measured 2026-11-21)
 - Seated VR with about 1,090 world draws: 59.9 fps.

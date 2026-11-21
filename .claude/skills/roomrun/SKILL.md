@@ -11,6 +11,7 @@ The spec is `BRAINSTORM.md`, "Pillar B". The code is `roomrun/`: a C++17 library
 ```
 roomrun/build.sh                         # build + full test suite in the opensa2-build container
 roomrun/run.sh ./build/roomrun-gen --room examples/rooms/living_room.json --seed 7 --out c.json --svg c.svg --obj c.obj
+roomrun/run.sh ./build/roomrun-gen --room R.json --sonic-cm 12 --play-obj p.obj   # the playable mesh the game gets
 roomrun/run.sh ./build/roomrun-batch --rooms 1000   # the acceptance batch (about 20 s); paths are relative to roomrun/
 roomrun/examples/make_examples.sh        # regenerate example SVG/OBJ/JSON and PNGs in examples/png/
 ```
@@ -33,6 +34,7 @@ Render the PNGs and inspect a few yourself. A course should read as a fun Hot Wh
 - **Module library:** `data/modules.json`. Chao Race uses `data/modules_chao.json`.
 
 ## Known weaknesses (update when fixed)
+- In a small play area (3 × 2.5 m around the user) the course is a compact figure-8 off to one side, mostly rails (seen in-game 2026-11-21).
 - 15 cm laps are short (median ~5.5 s).
 - Layouts are mostly perimeter loops.
 - Mid-room furniture is ignored.
@@ -40,5 +42,9 @@ Render the PNGs and inspect a few yourself. A course should read as a fun Hot Wh
 - Pillars can cross the lower deck at figure-8 crossings.
 - Homing chains usually have a single target.
 
-## Integration (later)
-The XR host links `libroomrun` and feeds it the traced floor polygon, boxes and player position. The course is injected into SA2 as a stage's geometry/collision table plus a SET object list: springs, dash panels, rings, rails as path data. Derive offsets independently; don't copy them from the CC BY-NC-ND / no-commercial mod sources.
+## Integration (Room Run v0, built 2026-11-21)
+- **In the game now:** `sa2_player_xr` links the library (host/xr/build.sh compiles `roomrun/src` from the `/roomrun` mount that `build-env/run.sh` and `build-env/cross/run.sh` add). See `external/OpenSA2/host/xr/README.md` "Room Run v0".
+- **`rr::buildPlayMesh`** (`playmesh.hpp`) is the contract with the game: every station a surface (springs, homing and gaps bridged as ramps; steep rises ramped back), rails a 14-unit strip, walls 24 units high both sides, collision chunks of 32 stations, colour groups for drawing, the centreline. Frame: metres, X = plan x, Y up, Z = -plan y (a proper rotation; triangles CCW from their walkable side). Its test: deck faces up, walls upright, all inside the room, no rise steeper than 0.45, deterministic.
+- **Input today:** the STAGE play-area rectangle (or `SA2_XR_ROOM_RUN_RECT`), the user at the head's place, Sonic 12 cm. Furniture boxes and the traced polygon come later.
+- **Verified offscreen in the real game:** Sonic ran 4.4 laps of a 4.66 m figure-8 with 0 falls (`media/roomrun_v0_*`). The module envelopes are still not certified against real SA2: v0 sidesteps that by making everything a road.
+- **Next for the game:** real springs, dash panels, rails and rings as SET objects (with their own draw marks to show in the room); a LandTable-style course instead of DynCol pieces if the piece count grows; derive offsets independently (never copy them from the CC BY-NC-ND / no-commercial mod sources).

@@ -9,6 +9,7 @@
 
 #include "roomrun/export.hpp"
 #include "roomrun/generator.hpp"
+#include "roomrun/playmesh.hpp"
 
 using namespace rr;
 
@@ -17,11 +18,11 @@ static void usage() {
                  "usage: roomrun-gen (--room room.json | --random TYPE [--room-seed K]) [--seed N]\n"
                  "                   [--out course.json] [--svg course.svg] [--obj course.obj] [--save-room r.json]\n"
                  "                   [--modules modules.json] [--sonic-cm 10] [--speed-scale 0.6] [--quiet] [--debug]\n"
-                 "                   [--prefer perimeter|figure8|helix|circle]\n");
+                 "                   [--prefer perimeter|figure8|helix|circle] [--play-obj playable.obj]\n");
 }
 
 int main(int argc, char** argv) {
-    std::string roomPath, outPath, svgPath, objPath, modulesPath, randomType, saveRoom;
+    std::string roomPath, outPath, svgPath, objPath, playObjPath, modulesPath, randomType, saveRoom;
     uint64_t seed = 1, roomSeed = 1;
     GenParams gp;
     bool quiet = false;
@@ -36,6 +37,7 @@ int main(int argc, char** argv) {
         else if (a == "--out") outPath = next();
         else if (a == "--svg") svgPath = next();
         else if (a == "--obj") objPath = next();
+        else if (a == "--play-obj") playObjPath = next();
         else if (a == "--modules") modulesPath = next();
         else if (a == "--sonic-cm") gp.sonicHeightM = std::atof(next().c_str()) / 100.0;
         else if (a == "--speed-scale") gp.speedScale = std::atof(next().c_str());
@@ -79,6 +81,14 @@ int main(int argc, char** argv) {
     if (!outPath.empty()) writeFile(outPath, courseToJson(r, lib, gp, seed).dump(4, true) + "\n");
     if (!svgPath.empty()) writeFile(svgPath, courseToSvg(r, lib, gp));
     if (!objPath.empty()) writeFile(objPath, courseToObj(r, lib, gp));
+    if (!playObjPath.empty()) {
+        PlayMesh pm = buildPlayMesh(r, lib, gp);
+        writeFile(playObjPath, playMeshToObj(pm));
+        if (!quiet)
+            std::printf("playable mesh: %zu stations, %zu collision chunks, %zu collision / %zu drawn triangles, %d bridged, %d raised, %d rail stations\n",
+                        pm.st.size(), pm.chunks.size(), pm.collisionTriangles(), pm.drawTriangles(), pm.bridgedStations,
+                        pm.raisedStations, pm.railStations);
+    }
     if (!quiet) {
         const Course& c = r.course;
         std::printf("skeleton=%s length=%.2fm modules=%zu fallback=%s repairs=%d candidates=%d time=%.0fms\n",
