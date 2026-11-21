@@ -9,6 +9,7 @@
 
 #include "roomrun/export.hpp"
 #include "roomrun/generator.hpp"
+#include "roomrun/objects.hpp"
 #include "roomrun/playmesh.hpp"
 
 using namespace rr;
@@ -18,11 +19,12 @@ static void usage() {
                  "usage: roomrun-gen (--room room.json | --random TYPE [--room-seed K]) [--seed N]\n"
                  "                   [--out course.json] [--svg course.svg] [--obj course.obj] [--save-room r.json]\n"
                  "                   [--modules modules.json] [--sonic-cm 10] [--speed-scale 0.6] [--quiet] [--debug]\n"
-                 "                   [--prefer perimeter|figure8|helix|circle] [--play-obj playable.obj]\n");
+                 "                   [--prefer perimeter|figure8|helix|circle] [--play-obj playable.obj] [--objects]\n");
 }
 
 int main(int argc, char** argv) {
     std::string roomPath, outPath, svgPath, objPath, playObjPath, modulesPath, randomType, saveRoom;
+    bool listObjects = false;
     uint64_t seed = 1, roomSeed = 1;
     GenParams gp;
     bool quiet = false;
@@ -38,6 +40,7 @@ int main(int argc, char** argv) {
         else if (a == "--svg") svgPath = next();
         else if (a == "--obj") objPath = next();
         else if (a == "--play-obj") playObjPath = next();
+        else if (a == "--objects") listObjects = true;
         else if (a == "--modules") modulesPath = next();
         else if (a == "--sonic-cm") gp.sonicHeightM = std::atof(next().c_str()) / 100.0;
         else if (a == "--speed-scale") gp.speedScale = std::atof(next().c_str());
@@ -88,6 +91,17 @@ int main(int argc, char** argv) {
             std::printf("playable mesh: %zu stations, %zu collision chunks, %zu collision / %zu drawn triangles, %d bridged, %d raised, %d rail stations\n",
                         pm.st.size(), pm.chunks.size(), pm.collisionTriangles(), pm.drawTriangles(), pm.bridgedStations,
                         pm.raisedStations, pm.railStations);
+    }
+    if (listObjects) {   // the game objects on the play mesh (Room Run in the game)
+        const PlayMesh pm = buildPlayMesh(r, lib, gp);
+        const CourseObjects co = placeObjects(r, pm, lib, gp);
+        std::printf("objects: %s\n", objectSummary(co).c_str());
+        for (auto& o : co.objs)
+            std::printf("  %-11s station %3d at %.3f %.3f %.3f m dir %.2f %.2f count %d launch %.2f %.2f %.2f speed %.1f lands %d apex %.1f\n",
+                        objKindName(o.kind), o.station, o.p.x, o.p.y, o.p.z, o.dir.x, o.dir.z, o.count, o.launchU.x, o.launchU.y, o.launchU.z,
+                        o.speedU, o.landStation, o.apexU);
+        for (auto& rl : co.rails) std::printf("  rail stations %d..%d, %zu points, climbs %.1f units\n", rl.s0, rl.s1, rl.pts.size(), rl.riseU);
+        for (auto& s : co.stats.notes) std::printf("  left out: %s\n", s.c_str());
     }
     if (!quiet) {
         const Course& c = r.course;

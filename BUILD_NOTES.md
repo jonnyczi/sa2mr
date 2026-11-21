@@ -449,3 +449,20 @@ See `host/xr/README.md`, "Fixes from the Frame's third test", and `docs/vr-game-
   - `host/xr/README.md`, `docs/vr-game-hooks.md`
   - No other upstream file.
 - **Checks:** roomrun tests pass; 1000-room batch identical to before apart from timing, plus the play-mesh line; test_tweaks 137 passed; test_stream 147 passed; public check 0 failures; flat `SA2_SELFTEST_OK` (menu at tick 3577).
+
+## Room Run objects (2026-11-21)
+
+See `host/xr/README.md`, "Room Run objects", `docs/vr-roomrun-objects.md` section 8 and `docs/vr-game-hooks.md` section 12.
+
+- **What:** the game's own rings (lines, circles, singles), springs, dash panels, dash ramps, grind rails and (opt-in) GUN Beetles/Hunters spawned on the generated course, drawn into the room at the course's scale, removed on put-back, restart, death and level end.
+- **Root repo:**
+  - New: `roomrun/include/roomrun/objects.hpp`, `roomrun/src/objects.cpp` (`rr::placeObjects`, the game-physics flight check).
+  - Edited: `roomrun/CMakeLists.txt`, `roomrun/tests/test_main.cpp` (game-objects test), `roomrun/tools/roomrun_batch.cpp` (objects line), `roomrun/tools/roomrun_gen.cpp` (`--objects`), `roomrun/examples/batch_1000.txt`.
+- **OpenSA2 files:**
+  - `runtime/tweaks/vr-sonic.c` (spawning, display trampolines, the ring batch wrap `sub_6c2af0`, rail assist, removal)
+  - `host/sa2_roomrun_course.h` (version 2: objects and rails)
+  - `host/sa2_stream.h` (`SA2S_MARK_RR_OBJECT` 6)
+  - `host/xr/xr_roomrun.cpp`, `host/xr/xr_roomrun.h`, `host/xr/xr_gpu.cpp`
+  - `host/xr/README.md`, `docs/vr-roomrun-objects.md`, `docs/vr-game-hooks.md`
+  - No other upstream file.
+- **Checks:** roomrun tests pass (15036 checks); 1000-room batch identical apart from timing, plus the objects line; test_tweaks 137 passed; test_stream 147 passed; `TEST_D3D9GPU_OK` 5445; flat `SA2_SELFTEST_OK` (menu at tick 3582); `RELEASE_BUILD_OK`, `XR_BUILD_OK`.

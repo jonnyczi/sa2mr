@@ -11,6 +11,7 @@
 #include "roomrun/export.hpp"
 #include "roomrun/field.hpp"
 #include "roomrun/generator.hpp"
+#include "roomrun/objects.hpp"
 #include "roomrun/playmesh.hpp"
 
 using namespace rr;
@@ -410,6 +411,73 @@ static void testPlayMesh() {
     CHECK(ok >= 20);
 }
 
+// The game objects on the play mesh (Room Run objects): every kept flight lands ahead on the course under
+// the game-physics model, rings sit above the deck inside the room, rails follow their strips, the same
+// course gives the same objects.
+static void checkObjects(const GenResult& r, const ModuleLibrary& lib, const GenParams& gp, int* rings, int* springs, int* springMods) {
+    const PlayMesh pm = buildPlayMesh(r, lib, gp);
+    const ObjectParams op;
+    const CourseObjects co = placeObjects(r, pm, lib, gp, op);
+    const CourseObjects co2 = placeObjects(r, pm, lib, gp, op);
+    CHECK(co.objs.size() == co2.objs.size() && co.rails.size() == co2.rails.size());
+    for (size_t i = 0; i < co.objs.size() && i < co2.objs.size(); ++i)
+        CHECK(co.objs[i].p.x == co2.objs[i].p.x && co.objs[i].p.y == co2.objs[i].p.y && co.objs[i].launchU.y == co2.objs[i].launchU.y);
+    const int N = (int)pm.st.size();
+    int sm = 0;
+    for (auto& m : r.course.mods) sm += m.kind == Kind::Spring;
+    *springMods += sm;
+    CHECK(co.stats.springs + co.stats.springsDropped == sm);
+    *springs += co.stats.springs;
+    *rings += co.stats.rings;
+    for (auto& o : co.objs) {
+        CHECK(pointInPolygon(r.room.floor, Vec2{o.p.x, -o.p.z}));
+        CHECK(o.station >= 0 && o.station < N);
+        const double deck = pm.st[o.station].p.y;
+        if (o.kind == ObjKind::Ring || o.kind == ObjKind::RingLine) CHECK(o.p.y >= deck + 4 * pm.mpu - 1e-9);
+        if (o.kind == ObjKind::RingLine) CHECK(o.count >= 3 && o.count <= 8 && o.spacingU > 8 && o.spacingU < 24);
+        if (o.kind == ObjKind::Spring || o.kind == ObjKind::DashRamp) {
+            const Vec3 from{o.p.x, o.p.y + (o.kind == ObjKind::Spring ? op.springLift * pm.mpu : 0), o.p.z};
+            const bool ramp = o.kind == ObjKind::DashRamp;
+            const FlightCheck fc = checkFlight(pm, from, o.launchU, o.station, 200, op, false, ramp ? op.rampHoldFrames : 0, ramp ? op.rampDrag : -1);
+            CHECK(fc.landStation == o.landStation);
+            const int ahead = (fc.landStation - o.station + N) % N;
+            CHECK(ahead >= 2 && ahead < N / 2);
+            CHECK(o.launchU.y > 0 && o.launchU.y < 5.0);   // the game's spring speed is 5 + scale.y: below 5, scale.y < 0
+        }
+        if (o.kind == ObjKind::DashPanel) CHECK(o.speedU > 5 && o.speedU <= 16 && o.lockFrames > 0);
+    }
+    for (auto& rl : co.rails) {
+        CHECK(rl.pts.size() >= 5 && rl.riseU <= op.railMaxRiseU);
+        for (size_t k = 0; k + 1 < rl.pts.size(); ++k)
+            CHECK_NEAR(rl.pts[k].y, pm.st[(rl.s0 + (int)k) % N].p.y + op.railHeightU * pm.mpu, 1e-9);
+    }
+}
+static void testObjects() {
+    GenParams gp;
+    gp.sonicHeightM = 0.12;
+    ModuleLibrary lib = ModuleLibrary::builtin(gp.speedScale);
+    int rings = 0, springs = 0, springMods = 0, courses = 0;
+    for (auto wh : {std::pair<double, double>{3.0, 2.5}, {4.0, 3.0}, {2.4, 2.4}, {5.0, 4.0}}) {
+        Room room;
+        const double w = wh.first / 2, h = wh.second / 2;
+        room.floor = {{-w, -h}, {w, -h}, {w, h}, {-w, h}};
+        room.player = {0, 0};
+        GenResult r = generateCourse(room, 1, gp, lib);
+        if (r.ok) { checkObjects(r, lib, gp, &rings, &springs, &springMods); courses++; }
+    }
+    Rng rng(4242);
+    for (int i = 0; i < 24; ++i) {
+        Room room = randomRoom(rng, (RoomType)(i % 4));
+        GenResult r = generateCourse(room, 7, gp, lib);
+        if (!r.ok) continue;
+        checkObjects(r, lib, gp, &rings, &springs, &springMods);
+        courses++;
+    }
+    std::printf("  objects: %d courses, %d rings, %d of %d springs kept\n", courses, rings, springs, springMods);
+    CHECK(rings >= courses * 6);
+    CHECK(springs * 2 >= springMods);   // most planned spring flights survive the game-physics check
+}
+
 int main() {
     struct T { const char* name; std::function<void()> fn; };
     std::vector<T> tests = {
@@ -417,7 +485,7 @@ int main() {
         {"joins", testJoins},             {"determinism", testDeterminism},
         {"clearance+completion", testClearanceAndCompletion},
         {"fallback", testFallback},       {"tiny room", testTinyRoomRejected},
-        {"exports", testExports},         {"playable mesh", testPlayMesh},
+        {"exports", testExports},         {"playable mesh", testPlayMesh}, {"game objects", testObjects},
     };
     for (auto& t : tests) {
         int before = gFailures;

@@ -18,7 +18,7 @@ configure_file(src/builtin_modules.cpp.in ${CMAKE_BINARY_DIR}/builtin_modules.cp
 add_library(roomrun STATIC
   src/json.cpp src/geom.cpp src/room.cpp src/field.cpp src/skeleton.cpp src/profile.cpp
   src/modules.cpp src/course.cpp src/assembler.cpp src/sim.cpp src/validate.cpp
-  src/generator.cpp src/export.cpp src/playmesh.cpp ${CMAKE_BINARY_DIR}/builtin_modules.cpp)
+  src/generator.cpp src/export.cpp src/playmesh.cpp src/objects.cpp ${CMAKE_BINARY_DIR}/builtin_modules.cpp)
 target_include_directories(roomrun PUBLIC include)
 
 find_package(Threads REQUIRED)

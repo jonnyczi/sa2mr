@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "roomrun/generator.hpp"
+#include "roomrun/objects.hpp"
 #include "roomrun/playmesh.hpp"
 
 using namespace rr;
@@ -30,6 +31,8 @@ struct Row {
     // facet (degrees; drops left out), the largest slope change between stations (drops left out)
     int pmTris = 0, pmPieces = 0;
     double pmSteep = 0, pmCrease = 0;
+    // the game objects on it (placeObjects): counts, and the flights the checks left out
+    int obRings = 0, obSprings = 0, obDash = 0, obRamps = 0, obRails = 0, obSpringsOut = 0, obRampsOut = 0, obRailsOut = 0, obSpringMods = 0;
 };
 
 static double pct(std::vector<double> v, double p) {
@@ -106,6 +109,11 @@ int main(int argc, char** argv) {
                         const PlayMesh pm = buildPlayMesh(r, lib, gp, pp);
                         row.pmTris = (int)pm.collisionTriangles();
                         row.pmPieces = (int)pm.chunks.size();
+                        const CourseObjects co = placeObjects(r, pm, lib, gp);
+                        row.obRings = co.stats.rings; row.obSprings = co.stats.springs; row.obDash = co.stats.dashPanels;
+                        row.obRamps = co.stats.dashRamps; row.obRails = co.stats.rails; row.obSpringsOut = co.stats.springsDropped;
+                        row.obRampsOut = co.stats.rampsDropped; row.obRailsOut = co.stats.railsDropped;
+                        for (auto& m : c.mods) row.obSpringMods += m.kind == Kind::Spring;
                         const int N = (int)pm.st.size();
                         const double step = c.sk.stepM;
                         for (int j = 0; j < N; ++j) {
@@ -151,6 +159,8 @@ int main(int argc, char** argv) {
         int n = 0, ok = 0, fb = 0, comp = 0, clear = 0, rep = 0, repCourses = 0, fallCourses = 0, netCourses = 0;
         long nets = 0, falls = 0;
         std::vector<double> len, el, al, bl, ms, pmT, pmP, pmS, pmC;
+        std::vector<double> obR;
+        long obS = 0, obSO = 0, obD = 0, obRp = 0, obRpO = 0, obRl = 0, obRlO = 0, obSM = 0; int noRings = 0;
         std::map<std::string, int> kinds, failures, use;
         std::map<std::string, std::pair<int, int>> byType;  // ok-without-fallback / total
         for (auto& r : rows) {
@@ -168,6 +178,8 @@ int main(int argc, char** argv) {
             if (r.falls) ++fallCourses;
             if (r.nets) ++netCourses;
             nets += r.nets; falls += r.falls;
+            obR.push_back(r.obRings); noRings += r.obRings == 0; obS += r.obSprings; obSO += r.obSpringsOut; obSM += r.obSpringMods;
+            obD += r.obDash; obRp += r.obRamps; obRpO += r.obRampsOut; obRl += r.obRails; obRlO += r.obRailsOut;
             pmT.push_back(r.pmTris); pmP.push_back(r.pmPieces); pmS.push_back(r.pmSteep); pmC.push_back(r.pmCrease);
             len.push_back(r.lengthM); el.push_back(r.expertLap); al.push_back(r.avgLap); bl.push_back(r.badLap); ms.push_back(r.ms);
             kinds[r.kind]++;
@@ -192,6 +204,9 @@ int main(int argc, char** argv) {
         std::printf("play mesh: collision triangles p50 %.0f  p95 %.0f  max %.0f (the game's pool 8191); pieces max %.0f (64); steepest walkable "
                     "deck facet p95 %.1f  max %.1f deg; largest slope change a station p95 %.3f  max %.3f\n", pct(pmT, 0.5), pct(pmT, 0.95),
                     pct(pmT, 1.0), pct(pmP, 1.0), pct(pmS, 0.95), pct(pmS, 1.0), pct(pmC, 0.95), pct(pmC, 1.0));
+        std::printf("game objects: rings a course p5 %.0f  p50 %.0f  p95 %.0f (%d courses without); springs %ld of %ld spring modules (%ld flights left out); "
+                    "dash panels %ld; dash ramps %ld (%ld left out); grind rails %ld (%ld too steep: strip only)\n", pct(obR, 0.05), pct(obR, 0.5),
+                    pct(obR, 0.95), noRings, obS, obSM, obSO, obD, obRp, obRpO, obRl, obRlO);
         std::printf("validator flags per module (all candidates, before repair):");
         for (auto& kv : failures) std::printf("  %s %d", kv.first.c_str(), kv.second);
         std::printf("\nmodule usage in final courses:");

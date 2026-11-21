@@ -124,6 +124,14 @@ Read `external/OpenSA2/host/xr/README.md` first. It holds the measured camera fi
   - **Test at the Frame's spots:** `SA2_VR_TEST_TP=F:x,y,z`; `SA2_VR_POS_LOG` logs collision, cache, pool and camera. Scratchpad `pb_w.sh` (take out, room, run, put back; `WY` moves the drop point on the window, `STEPS` stick steps).
   - **Ramp tests:** scratchpad `rr_ramp.sh` (the Frame's course, the hand drops him on station `ST` via the `k` frame, track steering forward then back) and `course_ramp.py <media dir>` (his height against the deck every 2 frames, passes, monotonic or not, samples without ground). Diagnostics `SA2_XR_ROOM_RUN_WALLS_APART=0`, `SA2_XR_ROOM_RUN_SHAPE=v0`.
 
+- **Room Run objects (2026-11-21).** README "Room Run objects"; `docs/vr-roomrun-objects.md` section 8.
+  - The game's own objects are spawned by `vr-sonic` from the course file (version 2) and drawn into the room by marks (`SA2S_MARK_RR_OBJECT` 6): their display slots point at **trampolines** (natives at our own arena addresses in the function table), which shift the view next to the object (60 units ahead) so the game's in-front tests pass with the camera held at the level.
+  - **Rings have no display:** the ring manager's batch `0x006C2AF0` draws every ring record; vr-sonic wraps it (ours hidden, then each alone, shifted).
+  - **Calling a lifted function twice from a wrap:** put ESP and EIP back before the second call (the first popped the return address); otherwise the guest's cookie check ends the game.
+  - **SET conventions (measured):** ring line `Ry Rx (0,0,-1)`; spring `Rz Rx (0,1,0)` at 5 + scale Y (rot Y only turns Sonic); dash ramp up = 3.2 + scale Z, held 23 frames.
+  - **Restart frees the SET objects but not rail path tasks.** Grind speed assist `SA2_VR_RR_RAIL_MIN` (2.0) or a slow climbing rail traps him.
+  - **Test:** scratchpad `rr_obj.sh` (5 × 4 m, seed 4; `ST` drop station, `BACK` put-back, `PAD` pad steps, `STICK2` a second stick range; the stick must be released before pause-menu steps). Evidence lines: `room run objects: rings A -> B`, `action 1 -> 7 ... from the spring`, `flight from ... landed`, `dash panel at station`, `Sonic grinding`, `is gone (destroyed)`, `after the removal: 0`.
+
 ## Frame performance (measured 2026-11-21)
 - Seated VR with about 1,090 world draws: 59.9 fps.
 - With `vr-level-culling` (radius 3000, about 1,780 world draws, so about 3,560 GPU draws after per-eye doubling): about 49–52 fps. Temperature is 75 °C, so it is CPU per-draw cost, not thermal.
