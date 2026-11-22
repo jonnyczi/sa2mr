@@ -824,3 +824,26 @@ See `host/xr/README.md`, "Dynamic resolution and the Frame's foveation".
   storage buffer): the next step for the per-draw cost on both threads.
 - **Upstream files modified:** `host/d3d9gpu/d9g_gpu.h` (draw_owned), `host/d3d9gpu/d9g_device_draw.cpp` (draw_owned,
   the sampler slots); `host/xr/build.sh` (xr_queue).
+
+## Performance round 11: the dips at the user's slow spot are the GPU (2026-11-22, `frame-r10`, c1528c99)
+
+- **The run:** pace 59.8, worst 5 s window 57; 279 frames over 25 ms and 827 late arrivals; the user: much better,
+  still felt.
+- **Attribution** (`game_frames.tsv` joined with `pace.tsv`): of the 388 player intervals over 25 ms, 361 came with the
+  game's frame waiting at the player (arrival to ready over 40 ms), 7 with a game frame over 16.7 ms of CPU, 3 with a
+  game gap at low CPU, 17 other. The game: 10 frames over 16.7 ms of CPU in the whole run (median about 9 ms).
+- **The player in the capture (the slow spot):** the stream thread 227 ms/s and the draw thread 231 ms/s of CPU, so
+  not CPU-bound (cores 2-4 at 3.13 GHz, no throttling). 932 frames were skipped for the GPU (the frame two back not
+  done), SDL's Present waited 2-3.3 ms and the XR hand-over 1.5-3 ms a frame in those windows: the GPU (ours with
+  SteamVR's) is the limit there now.
+- **Changes:**
+  - the eyes' render area (`SA2_XR_RES_CLIP`, on; `host/xr/xr_vk.cpp`, `xr_gpu.cpp`): passes on the eye targets begun
+    over the drawn part, so dynamic resolution (or `SA2_XR_RES_FIXED`) cuts a tiling GPU's bins, loads and stores;
+    before, the full 4320x2160 was binned at every scale. Dynamic resolution stays off by default (user decision);
+  - the GPU's time a game frame logged with `SA2_XR_TIMING` alone;
+  - the stream thread and the draw thread on a CPU each (2 and 3 by default; `SA2_XR_SPLIT_CPUS`).
+- **Verified:** offline at scale 1 the eyes byte-identical to before; at a fixed 0.75 the drawn parts byte-identical with
+  and without the clip; Monado: the clip on 2304x576 of 2560x720 at 0.8, 59.6 fps; "GPU, 300 frames" lines; the two
+  threads on CPUs 2 and 3. Public check passes.
+- **Not done:** draw batching (xelee's `AURORA_XR_BATCH`) and our own density map: the next GPU steps if the scale is
+  not enough.
