@@ -867,6 +867,20 @@ See `host/xr/README.md`, "Dynamic resolution and the Frame's foveation".
   each frame, for the defaults, Turnip forced to sysmem and to gmem (`TU_DEBUG`), two-pass stereo, and eyes at
   1620², 1404² and 1280x720. x86 check (Radeon 890M, 1774 draws): the GPU 2.9-4.0 ms a frame at 2160², two-pass 4.4-6.6, 1404² 2.0-3.0, 1280x720 1.6-2.6. The stream is 2 GB (on the Frame under ~/sa2perf/work).
 
+## Performance round 13: Turnip direct rendering for the VR player (2026-11-22, `frame-gpub`)
+
+- **The Frame's headless bench** (gpubench, 2160², GPU drained and timed each frame, no SteamVR): defaults 12.0-17.9 ms
+  a frame (2939 draws: 17.9), `TU_DEBUG=gmem` the same, `TU_DEBUG=sysmem` 6.2-9.0 (2939 draws: 9.0), two-pass 27, the
+  smaller eyes far less than sysmem. The binned (gmem) path, every draw set up in every bin, was the per-draw cost.
+- **Change:** the launcher sets `TU_DEBUG=sysmem` (appended to any TU_DEBUG) in the VR player's environment on arm64
+  (`SA2_XR_TU_SYSMEM=0` off, `=1` on elsewhere). Not the game, not the flat player, not SteamVR. Checked under Monado
+  with `SA2_XR_TU_SYSMEM=1`: the player's environment has it, the game's none. `host/launch/sa2_launch.cpp` (upstream).
+- **Downsides:** direct rendering spends memory bandwidth on overdraw, blending and depth that binning keeps on chip:
+  more power and heat for the same work; a net GPU-time win of 40-50% here.
+- **xelee** (Melee on Dawn) likely does well for the same reason its batching helps: far fewer draws a pass (Melee's
+  scenes are light, and `AURORA_XR_BATCH` joins them), so binning's per-draw cost stays small. Not measured there.
+- The bench's 2 GB stream on the Frame was deleted (`~/sa2perf/work`).
+
 **User decision (2026-11-22): the eyes always at full 2160² sharpness.**
 - In frame-r11, dynamic resolution (down to 0.65) made the slow spot "about the same", and the picture was "noticeably worse".
 - `SA2_XR_RES_DYNAMIC` stays off by default. Don't use resolution as a performance fix; reduce the GPU's per-draw cost instead.

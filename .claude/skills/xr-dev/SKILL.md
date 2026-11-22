@@ -176,6 +176,9 @@ Read `external/OpenSA2/host/xr/README.md` first. It holds the measured camera fi
     - **eye resolution:** the eyes have their own size (`SA2_XR_EYE_RES`, `SA2_XR_RES_SCALE`; README "Eye
       resolution"); Monado's maximum is 1920x1080, so test bigger sizes offline (`SA2_XR_SIM_FOV=100` for a square
       view, `SA2_XR_GPU_SYNC=1` with `SA2_XR_TIMING=1` for GPU time);
+    - **GPU on the Frame:** the cost is per draw under Turnip's binning; the VR player runs with `TU_DEBUG=sysmem`
+      (launcher, arm64; `SA2_XR_TU_SYSMEM`); `SA2_XR_TIMING=1` logs "GPU, 300 frames"; dynamic resolution stays off
+      (user decision: softer, no gain);
     - **draw thread:** the d9g::Gpu calls run on "sa2-draws" (`xr_queue.cpp`; `SA2_XR_DRAW_THREAD=0` off); a hook that
       changes XrGpu state in order with draws must go through `queue_post`. Measure the player offline through the
       live path (`--video-fd`, no stream hashing) and outside steam-run so perf can attach;

@@ -92,6 +92,9 @@ build-env/arm64/frame_deploy.sh log | fetch DIR | stop
 - Adding `taskset -c 0-6` for the launcher and player gave 38.9 fps: the player's main thread ran on the A520s more than half the time.
 - The player main thread is the other heavy single thread, and the compositor's RT RenderThread sits on 4-6.
 - The default (no pin) holds about 59 fps. If you pin, rank cores by `cpu_capacity`, never by max clock, and keep both heavy threads off 0-1. **The game on 2-3 with the player under `taskset -c 5-7` works** (frame-place2): 58.8 fps over a 5-minute session, the relay at a steady 60.0 fps, the game's CPU 8-10 ms a frame. The user reported "much better" frame rate and music. That run's `game.env` keeps `SA2_GUEST_HOST_CPUS=2-3`; launch with `FRAME_ENV="SA2_XR=1 SA2_XR_MODE=auto taskset -c 5-7"`.
+- Turnip renders the VR player direct to memory (`TU_DEBUG=sysmem`, set by the launcher for the player only on arm64;
+  `SA2_XR_TU_SYSMEM=0` off): 40-50% less GPU a frame than binning (round 13). For the player's GPU time alone, headless:
+  scratchpad `frameprof/frame_perf.sh gpubench` (variants; delete its 2 GB stream in `~/sa2perf/work` afterwards).
 - Who is late (rounds 8-9): the launcher's second "relay perf" line gives the game's per-frame CPU (p99, max, frames
   over 16.7 ms) and the session's `game_frames.tsv` every frame. Join it with `pace.tsv` by frame: arrival to
   `ready_s` about 34 ms is normal (lead 2); more, with the game's CPU under 16.7 ms, is the player (frame-r8's dips).
