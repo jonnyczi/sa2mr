@@ -50,22 +50,22 @@ EOF
 
 step "lifted image for aarch64-linux-musl, double f80 mode (24,040 modules)"
 if [ ! -f "$R/private/generated/s8/pc-double/linux-aarch64-obj/summary.json" ]; then
-  "$ROOT/build-env/run.sh" 'source tools/env.sh; .venv/bin/python private/sa2mr/arm64/lift_arm64.py --target aarch64-linux-musl --mode double --out private/generated/s8/pc-double/linux-aarch64-obj --jobs 8'
+  "$ROOT/build-env/run.sh" 'source tools/env.sh; .venv/bin/python sa2mr/arm64/lift_arm64.py --target aarch64-linux-musl --mode double --out private/generated/s8/pc-double/linux-aarch64-obj --jobs 8'
 fi
 
 step "host deps (SDL3, DXVK Native, dxbc-spirv, zstd, OpenXR loader) and the arm64 pins overlay"
-"$X" 'bash private/sa2mr/arm64/build_deps.sh'
+"$X" 'bash sa2mr/arm64/build_deps.sh'
 rm -f "$HERE/pins.json"
-"$X" '.venv/bin/python private/sa2mr/arm64/arm64_pins.py --out private/sa2mr/arm64/pins.json'
-mv "$R/private/sa2mr/arm64/pins.json" "$HERE/pins.json"
+"$X" '.venv/bin/python sa2mr/arm64/arm64_pins.py --out private/sa2mr/pins.json'
+mv "$R/private/sa2mr/pins.json" "$HERE/pins.json"
 
-step "the hot-function link order (from the perf profiles under private/sa2mr/arm64/hot/profiles, if any)"
-if ls "$R"/private/sa2mr/arm64/hot/profiles/*.txt >/dev/null 2>&1; then
-  "$ROOT/build-env/run.sh" 'source tools/env.sh; .venv/bin/python private/sa2mr/arm64/hot_order.py'
+step "the hot-function link order (sa2mr/arm64/hot/hot_order.txt is tracked; regenerated when the private profiles under private/sa2mr/hot-profiles exist)"
+if ls "$R"/private/sa2mr/hot-profiles/*.txt >/dev/null 2>&1; then
+  "$ROOT/build-env/run.sh" 'source tools/env.sh; .venv/bin/python sa2mr/arm64/hot_order.py'
 fi
 
 step "the release"
-"$X" 'source tools/env.sh; .venv/bin/python private/sa2mr/arm64/release_build_arm64.py'
+"$X" 'source tools/env.sh; .venv/bin/python sa2mr/arm64/release_build_arm64.py'
 
 if [ "${1:-}" = test ]; then
   step "test bench (QEMU): install, then the selftest"

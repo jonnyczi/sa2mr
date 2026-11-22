@@ -21,13 +21,15 @@ description: Build the native aarch64 Linux release of OpenSA2 (cross-compiled o
 ## How it's built (verified 2026-11-21)
 - **`sa2-game`** is the translated image (`perf_f80.py --target aarch64-linux-musl --mode double`, about 8 min), linked **static musl** with zig. It has no glibc dependency.
 - **Players, launcher and installer** use Debian's `aarch64-linux-gnu-g++-14` against the sniper sysroot, with static libstdc++. The newest symbol is GLIBC_2.30.
-- **`private/sa2mr/arm64/`** holds the drivers:
+- **`sa2mr/arm64/`** (tracked in the fork; `private/sa2mr/arm64` is a symlink to it) holds the drivers:
   - `release_build_arm64.py`, which reuses `release_build.py`'s steps. Use `--only tables,game,players,install,launch,assemble,package` to rerun parts.
   - `build_deps.sh` (SDL3, DXVK, zstd, OpenXR loader).
-  - `xwrap/`: compiler wrappers plus the CMake/meson cross files.
+  - `xwrap/`: compiler wrappers plus the CMake/meson cross files. Its `bin/` and `lib/` symlinks are made by `xwrap/links.sh` (build_deps.sh and release_build_arm64.py run it): the fork's public_check refuses tracked symlinks.
+  - `release_build_arm64.py --no-game` assembles and packages without `bin/sa2-game` (the installer's app); `--f80-cached` links from objects whose folded IR is gone (the on-device relink).
+  - `hot/hot_order.txt` is tracked (only `sub_` names, user decision); the perf profiles stay in `private/sa2mr/hot-profiles/`.
 - **Single steps:**
-  - `build-env/cross/run.sh 'bash private/sa2mr/arm64/build_deps.sh'`
-  - `build-env/cross/run.sh 'source tools/env.sh; .venv/bin/python private/sa2mr/arm64/release_build_arm64.py --only players'`
+  - `build-env/cross/run.sh 'bash sa2mr/arm64/build_deps.sh'`
+  - `build-env/cross/run.sh 'source tools/env.sh; .venv/bin/python sa2mr/arm64/release_build_arm64.py --only players'`
 - **Gotchas already solved:**
   - GCC, not clang: the tree's duplicate-symbol check is GCC-specific.
   - The cross toolchain's own glibc is hidden.

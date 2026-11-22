@@ -29,7 +29,7 @@ Everything runs in the Debian 13 container through `build-env/run.sh '<cmd>'`, w
    .venv/bin/python tools/s4/mb_edges.py --tag next+allarms --lift-tag next --arms-tag next
    .venv/bin/python tools/s3/whole_image/gen_table.py --tag next+allarms --out private/generated/s3/link/next+allarms/function_table_whole.c
    .venv/bin/python tools/s7/drm_unwrap.py --companion
-   .venv/bin/python private/sa2mr/finalize_extras.py        # REQUIRED: rebuild_image leaves the extras state without "objects"
+   .venv/bin/python sa2mr/finalize_extras.py                # REQUIRED: rebuild_image leaves the extras state without "objects"
    .venv/bin/python tools/s8/perf_f80.py build --target x86_64-linux-musl --mode double --out private/generated/s8/pc-double/linux-obj --jobs 22
    ```
 5. **Host deps** (once): `SA2_BUILD_JOBS=8 bash tools/s5/build_host_deps.sh --fetch`. The ALSA headers `.deb` must already be in `private/s5-tools/dl`. The SDL3 hash differs from upstream, so it was repinned locally in `tools/pins.json`.

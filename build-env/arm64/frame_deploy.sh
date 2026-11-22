@@ -38,7 +38,7 @@ STOP="for n in sa2recomp sa2_player_gpu sa2_player_xr sa2_player sa2-game; do \
 
 case "${1:-}" in
 deploy)
-    [[ -f "${PACKAGE}" ]] || { echo "no ${PACKAGE}: run private/sa2mr/arm64/release_build_arm64.py" >&2; exit 1; }
+    [[ -f "${PACKAGE}" ]] || { echo "no ${PACKAGE}: run sa2mr/arm64/release_build_arm64.py" >&2; exit 1; }
     stage="$(mktemp -d)"
     trap 'rm -rf "${stage}"' EXIT
     tar -xzf "${PACKAGE}" -C "${stage}"

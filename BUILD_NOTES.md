@@ -993,3 +993,74 @@ Plan: players download `Install-SA2MR.desktop` from our GitHub Releases. The ins
   - Under this Mono, `Steamless.API.dll` and `SharpDisasm.dll` must sit next to `Steamless.CLI.exe` (copied from `Plugins/`). Otherwise there's a TypeLoadException.
   - With `proton run` instead of `runinprefix`, it hung on a pipe: `run` goes through `steam.exe`. Use `runinprefix` with stdin from `/dev/null`.
 - Our installer's dry run on the Frame's Steam copy (`sa2-install --source steam`): all 4,191 files ok, `SA2_INSTALL_OK`, 6.6 s.
+
+### Frame translation toolchain asset (2026-11-22)
+`build-env/frame-toolchain/build.sh OUTDIR [--jobs N] [--remill-work DIR] [--no-verify]` (new files) builds `sa2mr-toolchain-aarch64.tar.zst`: everything the Frame needs, besides its own git/clang/lld/curl/zstd and Python 3.12, to run the translation chain. Everything in it is open source and built from pinned inputs. It holds no SEGA code or data.
+- **Inputs:** `toolchain.lock` (zig, the iced-x86 sdist, the pefile wheel, Rust 1.90.0) and `iced-x86-1.21.0.Cargo.lock` (crates.io checksums), plus remill's `sources.lock`. The output's `toolchain.lock` lists all of them (name, file, sha256, URL), including the 30 crates that are built.
+- **Layout** (top directory `sa2mr-toolchain-aarch64/`):
+  - `remill/` is the `SA2_REMILL_PREFIX` for `SA2_REMILL_MODE=unshare`. It holds `bin/remill-lift-14` (from `run-cross.sh`, which resumes from its `.ok` stamps), `share/remill/14/semantics`, and `include/remill/`. The 43 headers are taken from the pinned x86 package, the same files the x86 build's `REMILL_INC` uses. The game link includes only `remill/Arch/X86/Runtime/State.h` and what it pulls in.
+  - `zig/` is zig 0.15.2 aarch64-linux (`SA2_ZIG=<tc>/zig/zig`).
+  - `wheels/` holds `iced_x86-1.21.0-cp38-abi3-manylinux_2_28_aarch64.whl` and `pefile-2024.8.26-py3-none-any.whl`. pytest, the third entry in `requirements.txt`, is only for tests. No other third-party import is used by the build tools.
+  - `licenses/` (remill, LLVM, XED, glog, gflags, sleigh, Ghidra, zig, pefile, iced-x86-py, Rust std, every linked crate), `SOURCES.txt`, `BUILDINFO`, `env.sh` (sets `SA2_ZIG`, `SA2_REMILL_PREFIX`, `SA2_REMILL_MODE`, `SA2_CROSS=`) and `MANIFEST.sha256`.
+  - Beside the tarball: `.sha256`, `toolchain.lock` and `sa2mr-toolchain-aarch64.manifest` (sha256, size and path of each file).
+- **The iced-x86 wheel** is cross-built in `opensa2-cross` (`build_iced_wheel.sh`): cargo `--locked`, clang-19 and lld against the sniper sysroot, paths remapped, stripped. `mkwheel.py` writes the wheel deterministically. The extension needs **glibc 2.28** (`libc`, `libpthread`, `libgcc_s`), so its tag is manylinux_2_28. The build fails if it needs more than 2.31. It takes about 20 s, and nothing runs under QEMU.
+- **Result:** 18,245 files, 372 MB unpacked, **68 MB** as `.tar.zst` (zstd -19). zig is 316 MB of the unpacked size and remill 54 MB. With the remill build already done, a run takes about 75 s plus about 4 min of QEMU checks. A clean remill build adds about 8 min. **Two rebuilds gave the same tarball** (sha256 `a9d21925…`).
+- **Check** (`verify.sh`, under QEMU):
+  - The manifest verifies.
+  - In `python:3.12-slim-bookworm` arm64: a venv, then `pip install --no-index --find-links wheels iced-x86 pefile`. Importing both works, and iced decodes `55 89 e5 5d c3`.
+  - `zig version` prints 0.15.2, and `zig cc -target aarch64-linux-musl` builds a hello that runs.
+  - `remill-lift-14 --arch x86 --os windows --bytes 5589e55dc3 --address 0x401000` gives **byte-identical IR to the x86_64 package**. The test bytes are synthetic. Under qemu-user the prefix is mounted at `/usr/local`, because `unshare` fails there. The script prints `TOOLCHAIN_VERIFY_OK`.
+- **Open:**
+  - The chain also calls `nm` (`f80_legalize.py`) and `strip`/`objcopy`/`readelf`/`objdump` (`release_build_arm64.py`, with `SA2_CROSS=`). The toolchain relies on the Frame's binutils for these. They should come with its gcc/cc, but that hasn't been checked.
+  - steamstub_unpack was dropped (SA2 uses SteamStub 2.x, so Steamless runs under Proton instead).
+  - This hasn't been run on a real Frame, and the `--native` CI path hasn't been run either.
+
+### Build drivers tracked in the fork; the on-device builder (Phases 2.2–2.3 and 4, 2026-11-22)
+
+**Drivers moved to a tracked `sa2mr/` in the fork** (new files, nothing committed yet):
+- `sa2mr/arm64/`: `lift_arm64.py`, `release_build_arm64.py`, `build_deps.sh`, `hot_order.py`, `arm64_pins.py`, `xwrap/` and `hot/hot_order.txt`. Also `sa2mr/finalize_extras.py`, which now finds `tools/s4` from its own path instead of the working directory.
+- `ROOT` is now `parents[1]` (`parents[2]` for `lift_arm64`/`arm64_pins`). The xwrap scripts and cross files name `/work/sa2mr/arm64/xwrap`.
+- **`xwrap/bin` and `xwrap/lib` are no longer files.** The fork's `public_check.py` refuses tracked symlinks, and `*.so` is ignored. `xwrap/links.sh` makes them instead (`build_deps.sh` and `release_build_arm64.py cross_env()` run it), and `xwrap/.gitignore` ignores them.
+- **Old paths still work.** `private/sa2mr/arm64` and `private/sa2mr/finalize_extras.py` are now symlinks to the tracked copies. The old directory is kept at `private/sa2mr/.arm64-before-move-2026-11-22`.
+- **The perf profiles stay private,** moved to `private/sa2mr/hot-profiles/` (the new `hot_order.py` default). `hot_order.py` regenerates the tracked `hot_order.txt` byte for byte from them.
+- `build-env/arm64/build_release.sh`, `frame_deploy.sh`, `CLAUDE.md` and the `frame-deploy`/`opensa2-build` skills use the new paths.
+- **Trimmed map:** `Documentation/sa2mr/function-map-trimmed.json` (`trim_map.py`, 12,683 functions, 903 jump tables, 1.37 MB).
+- **Translation inputs:** `sa2mr/frame/translation_inputs.txt` lists the globs whose files make the translation key.
+
+**`release_build_arm64.py`, new options:**
+- `--no-game` assembles and packages without `bin/sa2-game` (the installer's app):
+  - it refuses the `game` step and removes a stale `bin/sa2-game`;
+  - it writes `share/cpu-needs.txt` from `lift_arm64.cpu_flags()`, and `share/game.env` if there is none;
+  - the table hashes are null when there is no table.
+  - **Not yet run.** The CI app job also still needs the install table for `sa2-install` and the launcher, and `install_table.py` reads the exe. That's open for Phase 3.
+- `--f80-cached` links from an f80 build whose folded IR is gone. Every other check of `release_build.f80_build` is redone, as are the hashes of any IR still there.
+- **On the device,** `tables` and `game` run natively with `SA2_CROSS=''`. From the code: `step_game` needs only zig (`SA2_ZIG`, a static musl link) and `strip`. The sniper sysroot and the arm64 deps are read only by the `players`/`install`/`launch`/`assemble` steps.
+
+**Root repo, new files:**
+- `platforms/steam-frame/sa2mr_build.py`: steps 0–14, with the state and translation key described in its docstring.
+- `add_to_steam.py`: the port of xelee's `frame_shortcut.py`. It keeps the VDF types (int32, float32 and uint64), uses `--stop-steam` with `systemctl --user stop/start steam.service`, and has `--remove` and `--recheck`.
+- `sa2mr-vr.sh`: merges `share/game.env.vr` with `~/.config/sa2mr/game.env.local` into `share/game.env`, because the launcher passes only `game.env` and `SA2_XR*` to the game and the player. It then exports `SA2_XR=1` and execs `bin/sa2recomp`.
+- `game.env`: the VR settings. It drops `practice-stage` and `draw-distance` from the Frame's hand-kept copy.
+- `tests/test_frame_scripts.py`: 15 unittest cases.
+- `build-env/frame-kit/make_kit.sh OUT`: makes the kit from `git archive HEAD` and adds uncommitted `sa2mr/` and `Documentation/sa2mr` files, with a warning. A deny scan follows: no PE or ELF files, no `.ll/.bc/.o/.a/.so/.exe/.dll`, nothing over 20 MB, nothing under `private/`, and no symlinks that leave the kit.
+
+**What the relink needs once `work/` is gone (the cache keep-list, about 480 MB):**
+- the aarch64 f80 objects, with `build.jsonl`, `summary.json` and the shims;
+- `s3/whole_image/build/next+allarms` (`f80_linkdir` compares its object names);
+- `s3/link` (the function table) and `s4/link` (edges and extras);
+- the release work dir's `install/` and `overlay/` tables;
+- the remill prefix's `include/` (`link_s4` compiles the runtime against remill's `State.h`). The toolchain check now requires it.
+
+**Checks:**
+- **Unit tests pass on Python 3.12** (15 of 15): VDF round trip with other entries kept byte for byte; `OpenVR=1`; replace by Exe; remove; `.bak`; the translation key (kit and toolchain); the cache and state; the dry-run plan.
+- **Tree syntax:** all 563 `.py` files of the kit parse as Python 3.12.
+- **Deny scan:** `make_kit.sh` passes the real kit (1,651 files), and refuses a planted PE and a planted ELF.
+- **`public_check.py` passes** on the fork and on the unpacked kit (0 failures).
+- **Relink smoke** (x86 host, cross container): step 13 ran from a cache seeded from this machine's tree.
+  - The tree's existing `linux-aarch64-obj` was **refused as stale**: it predates the `SA2_ZIG` change to `tools/s7/f80_legalize.py`.
+  - A fresh `lift_arm64.py` (24,040 modules, 518 s at 12 jobs) did link: `RELEASE_BUILD_ARM64_OK`, hot order 1,328 objects first, a static aarch64 `sa2-game` of 152 MB, in 13 s.
+- **Not yet run:**
+  - steps 0–12 on any device;
+  - Steamless under Proton from the script;
+  - a full on-device build or `LIFT_IR_OK` with the aarch64 remill;
+  - the Steam restart.
