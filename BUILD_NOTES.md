@@ -654,3 +654,14 @@ public check 0 failures.
 - **The Frame's game.env:** drop `draw-distance` from `SA2_TWEAKS` (or add `SA2_DRAW_DISTANCE_SCALE=1.25`) for Wild Canyon.
   - **User decision (2026-11-22): normal draw distance.** `draw-distance` is removed from the Frame's `SA2_TWEAKS`; the backup is `game.env.bak-dd`.
   - Now: `skip-intro,start-in-chao-world,vr-chao-garden,fov,vr-level-culling,vr-object-culling,vr-chao-hands,vr-sonic`.
+
+## VR eye resolution (2026-11-22, the Frame: "the image is blocky")
+
+See `host/xr/README.md`, "Eye resolution".
+- **Before:** the eyes were the game's 1280×720 back buffer, stretched over a square view (pixels 1.9 times as tall as
+  wide).
+- **Now:** the eyes have their own size. `SA2_XR_EYE_RES=auto` (the default) uses the runtime's recommended size times
+  `SA2_XR_RES_SCALE` (default 1), so 2160×2160 an eye on the Frame. The game's viewports, scissors, copies and point
+  sizes are scaled into them. The HUD, the bubble and the mono window stay at the game's size.
+- **Measured on x86:** the GPU drain per frame is 1.5 ms at 720p and 2.8 ms at 2160². The Frame check is still to do.
+- **Files:** `host/xr/xr_gpu.cpp`, `host/xr/README.md`. The flat player and d3d9gpu are unchanged.
