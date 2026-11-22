@@ -652,3 +652,5 @@ per-draw zeroing of uniform slots (`pack_uniforms`, about 2% of the player).
 `TEST_D3D9GPU_OK 5445`; `test_stream` 147; flat `SA2_SELFTEST_OK` (offscreen, menu at tick 3575); `XR_BUILD_OK`;
 public check 0 failures.
 - **The Frame's game.env:** drop `draw-distance` from `SA2_TWEAKS` (or add `SA2_DRAW_DISTANCE_SCALE=1.25`) for Wild Canyon.
+  - **User decision (2026-11-22): normal draw distance.** `draw-distance` is removed from the Frame's `SA2_TWEAKS`; the backup is `game.env.bak-dd`.
+  - Now: `skip-intro,start-in-chao-world,vr-chao-garden,fov,vr-level-culling,vr-object-culling,vr-chao-hands,vr-sonic`.
