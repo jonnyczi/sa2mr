@@ -740,3 +740,35 @@ See `host/xr/README.md`, "Dynamic resolution and the Frame's foveation".
   eyes pixel-identical at scale 1 (1280×720 and 1600²). Public check passes. The flat player's path is unchanged (lead
   1, the d3d9gpu untouched).
 - **Upstream file modified:** `host/launch/sa2_launch.cpp` (the relay's lead for VR).
+
+## Performance round 8: the dips are the game's frames; per-frame game CPU; lazy eye clears (2026-11-22, `frame-r7`, `frame-60hz`)
+
+- **frame-r7 (b911c75d, 120 Hz):** pace 59.2; the audio healthy (queue mean 88 ms, 7 of 18,700 frames under 5 ms);
+  17 frames skipped. Draw CPU 4.5 ms in the tail is the scene, not a regression: 1080 draws there against 513 in
+  frame-dyn1's tail, about 4.4 µs a draw in both. The early 43-48 fps stretch (session frames ~2400-2750) is City
+  Escape's opening run downhill: 2244 world draws, the player's draws 11 ms a frame, the GPU 11-17 ms at 0.65.
+- **frame-60hz (SteamVR at 60 Hz):** the dips stayed (53-54 around frames 10,000-11,000) with our GPU under 5 ms
+  (scale pinned at 0.65 by a bug: the miss test compared with the shortest period ever seen, 8.3 ms). In
+  `pace.tsv` there the frames reach the player late (14 and 12 gaps over 25 ms in two 600-frame windows) while the
+  player presents 2.4-3.6 ms after each arrives: the frames are late from the game, not the player or the GPU.
+  The game's process CPU in a live capture: main thread 324 ms/s, the XAudio2/CRI streaming thread 90 ms/s (18% of
+  the game's cycles, the reverb network `sub_843460`), both on CPU 7 and under the guest lock.
+- **The replay on x86 (ce.zip, every tick timed):** no single-tick spikes; the heaviest 100-tick windows (ticks
+  1300-1500 and 2000-2250) average 6.6 ms with a max of 8.7 (1.3×). The Frame's X4 replay peaks at 11.1 ms a tick
+  over 0.5 s. So per-frame game timing from the live Frame session is needed (below).
+- **Changes:**
+  - the relay's game CPU from the game's CPU clock (`clock_getcpuclockid`, ns), and per frame: a second "relay
+    perf" line (median, p90, p99, max, the longest gap, frames over 16.7 ms by number) and the session's
+    `game_frames.tsv` (`host/launch/sa2_relay.{h,cpp}`, `sa2_launch.cpp`);
+  - dynamic resolution off by default (`SA2_XR_RES_DYNAMIC=1` on); its miss test against the shortest period of the
+    last 128 (`host/xr/xr_gpu.cpp`);
+  - lazy eye clears: the eyes' four full-size clear passes a frame become the next pass's load ops
+    (`Gpu::clear_lazy` in `host/d3d9gpu/d9g_gpu.h`, `d9g_gpu_sdl.cpp`; XR only, `SA2_XR_LAZY_CLEAR=0` off).
+    SDL render passes a frame offline: 10.3-14.0 to 6.3-10.0; eyes pixel-identical;
+  - `SA2_XR_PROBE` logs the eye passes' starts and breaks; `SA2_XR_TIMING` adds SDL's render passes a frame.
+- **Verified:** XR_BUILD_OK; offline eyes identical with and without lazy clears (1600²); Monado CE 59.7 fps,
+  `game_frames.tsv` written, relay lines (CPU median 8.6-9.1, max 13.2-15.4 ms on x86); pytest relay, cpu_place,
+  d3d9gpu (TEST_D3D9GPU_OK) pass; test_s5_stream has the same 14 failures with and without these changes (no
+  `zstd` in the container). Public check passes.
+- **Upstream files modified:** `host/d3d9gpu/d9g_gpu.h`, `host/d3d9gpu/d9g_gpu_sdl.cpp` (clear_lazy; the flat
+  player never calls it), `host/launch/sa2_relay.{h,cpp}`, `host/launch/sa2_launch.cpp`.

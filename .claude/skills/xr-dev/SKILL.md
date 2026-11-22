@@ -176,6 +176,8 @@ Read `external/OpenSA2/host/xr/README.md` first. It holds the measured camera fi
     - **eye resolution:** the eyes have their own size (`SA2_XR_EYE_RES`, `SA2_XR_RES_SCALE`; README "Eye
       resolution"); Monado's maximum is 1920x1080, so test bigger sizes offline (`SA2_XR_SIM_FOV=100` for a square
       view, `SA2_XR_GPU_SYNC=1` with `SA2_XR_TIMING=1` for GPU time);
+    - **render passes:** `SA2_XR_TIMING=1` prints the eyes' passes and SDL's passes a frame; `SA2_XR_PROBE=<frames>`
+      logs what breaks the eye pass; the eyes' clears are lazy (`SA2_XR_LAZY_CLEAR=0` off; `Gpu::clear_lazy`);
     - **late GPU frames:** the player skips frames the GPU has no room for (`SA2_XR_SKIP=0` waits) and the relay leads
       by 2 in VR (`SA2_RELAY_LEAD`); test with `SA2_XR_TEST_GPU_MS=25` under Monado: the game must stay at 60 and the
       audio queue (pace.tsv) above ~20 ms; player.err "frames the GPU had no room for" counts skips;
