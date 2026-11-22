@@ -74,6 +74,10 @@ build-env/arm64/frame_deploy.sh log | fetch DIR | stop
     - draw distance 2×: 11.5; 1.25×: 9.2; normal: 8.4. On the X4 at 2×: 9.7.
     - The generic armv8 build is the same as cortex-a720 (so `-mcpu` gains nothing). The hot-function-ordered build is −4%.
   - **Live Wild Canyon with normal draw distance and auto-placement: 59.9 fps, 24 frames over 25 ms in 23k, the relay at 60.0.** This is the working Frame setup (the user's decision: normal draw distance).
+  - **City Escape through the truck chase with 2160² eyes and the player's draw thread (round 10, frame-r10, 2026-11-22): 59.8 fps, the worst 5-second window 57.**
+    - The player main thread uses about 227 ms/s and the draw thread about 231 ms/s, both on 2-3. Before the split, the main thread used 860-930 ms/s.
+    - The game's per-frame CPU median is about 9 ms, with at most 10 frames over 16.7 ms in a 600-frame window.
+    - The lesson from rounds 6-9: the dips came from the player's main thread being CPU-bound, not from the GPU. To find a bottleneck, join `game_frames.tsv` with `pace.tsv` before blaming the GPU.
 - **Profiling on the headset:** scratchpad `frameprof/frame_perf.sh` (push, info, suite, live, fetch; a bundled Debian
   arm64 perf). Ask before running anything on the Frame.
 - **Frame specifics to expect:**
