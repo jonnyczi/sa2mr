@@ -848,6 +848,25 @@ See `host/xr/README.md`, "Dynamic resolution and the Frame's foveation".
 - **Not done:** draw batching (xelee's `AURORA_XR_BATCH`) and our own density map: the next GPU steps if the scale is
   not enough.
 
+## Performance round 12: the GPU's cost is per draw; batching has little room (2026-11-22, `frame-r11`)
+
+- **frame-r11 (c73674f1, dynamic resolution on):** frames over 25 ms 130 (from 279); at the slow spot the scale sat at
+  0.65 and the GPU still took 9-13 ms a game frame; the user: about the same, and visibly softer. Dynamic resolution stays
+  off for good (user decision); the render-area clip stays.
+- **GPU time against draws** (the run's "dynamic resolution" lines, our timestamps, SteamVR's work inside them): about
+  680 world draws 7.7 ms at 0.75 and 9.5 ms at 0.65 (no fall with the pixels); 1130 draws 12-16 ms; 2880 draws 26 ms;
+  menus with no world 1.7-2.8 ms. About 8-11 µs of GPU a draw (xelee measured about 6 on the Quest 3).
+- **Batching's room** (`SA2_XR_QSTAT=1`, x86, City Escape streams): only 2-4% of draws are like the draw before in
+  all but their constants and index range (program, pipeline, targets, textures, vertex and index buffers); 33% share
+  the program and textures but not the buffers or state. SA2 draws each object from its own buffers, so xelee's
+  batching (same pipeline, a range table, constants from a storage buffer) would join almost nothing without vertex
+  pulling across buffers: not done. Redundant binds and uniform pushes are already skipped (`d9g_gpu_sdl.cpp`
+  `record_uniform`, `bound_`).
+- **Next, measured on the Frame without SteamVR in the way:** scratchpad `frameprof/frame_perf.sh gpubench` (headless,
+  ~10 min): the recorded City Escape replayed once into a stream, then the VR player on it with the GPU drained and timed
+  each frame, for the defaults, Turnip forced to sysmem and to gmem (`TU_DEBUG`), two-pass stereo, and eyes at
+  1620², 1404² and 1280x720. x86 check (Radeon 890M, 1774 draws): the GPU 2.9-4.0 ms a frame at 2160², two-pass 4.4-6.6, 1404² 2.0-3.0, 1280x720 1.6-2.6. The stream is 2 GB (on the Frame under ~/sa2perf/work).
+
 **User decision (2026-11-22): the eyes always at full 2160² sharpness.**
 - In frame-r11, dynamic resolution (down to 0.65) made the slow spot "about the same", and the picture was "noticeably worse".
 - `SA2_XR_RES_DYNAMIC` stays off by default. Don't use resolution as a performance fix; reduce the GPU's per-draw cost instead.
