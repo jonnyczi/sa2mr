@@ -895,3 +895,65 @@ See `host/xr/README.md`, "Dynamic resolution and the Frame's foveation".
   - the draw thread;
   - the game on the X4;
   - normal draw distance.
+
+## Release and on-Frame install: plan and first findings (2026-11-22)
+
+Plan: players download `Install-SA2MR.desktop` from our GitHub Releases. The installer translates the user's own Steam copy on the Frame, then adds a Steam entry with `OpenVR=1`.
+- No proprietary file is ever hosted on GitHub: not in either repo, Releases, Actions artifacts or caches (user decision).
+- The source is a public fork `jonnyczi/OpenSA2`, pulled in as a submodule.
+- The full plan is in the session's plan file. Its decisions are repeated in CLAUDE.md once the work lands.
+
+**Frame facts (read-only probe, 2026-11-22):**
+- **System:** SteamOS 0.4.5 (build 20261022), kernel 6.18, glibc 2.39, 8 cores, 15.6 GB RAM (about 10 GB available with Steam running). `/home` has 80 GB free.
+- **`/tmp` is a 7.7 GB tmpfs, so the build must never use it.**
+- **Python and tools:** Python 3.12.3, with venv, ensurepip, sqlite3 and lzma. All of these are present:
+  - git, clang, ld.lld, cc, make;
+  - curl, rsync, zstd, tar, xz;
+  - konsole, kdialog, zenity, notify-send;
+  - systemd-inhibit, systemd-run, `steamos-add-to-steam`, unshare.
+- **Unprivileged user namespaces work:** `unshare -Urm` plus a bind mount succeeded, so remill's bind-mount mode runs as it is.
+- **Steam:** runs as `steam.service`, a user unit, from `steamrtarm64`. One library at `~/.local/share/Steam`, one user in `userdata/`.
+- **Proton and FEX:**
+  - `Proton 11.0 (ARM64)` ships `files/share/wine/mono`, which Steamless needs.
+  - `FEX-Emu` (3127680) is installed at `steamapps/common/FEX-Emu`, with a `rootfs` and `fex-compat-tool`. `/usr/bin/FEXBash` is there too.
+- **Temperatures and power:** CPU idle at about 45 °C. The battery and USB charger are visible in `/sys/class/power_supply`.
+
+**DRM removal:** SA2's exe uses **SteamStub variant 2.x**.
+- A `VLV` block sits in the DOS stub, and the 0x300-byte loader header at `.bind`+0x1aec is XOR-chained with key 0xB47CC18E.
+- `illnyang/steamstub_unpack` handles only 3.x, so it can't be used.
+- The changes to the headers are mechanical, checked against the pinned unpacked file:
+  - the DOS-stub block zeroed;
+  - the section count, entry point and SizeOfImage patched;
+  - the `.bind` header entry zeroed and the file cut at `.bind`;
+  - `.data` and `.rsrc` renamed (the wine-mono quirk).
+- `.text` is block-encrypted by the stub's DRM library. The key isn't stored anywhere in the file in plain form.
+- So the main route is **Steamless 3.1.0.5, downloaded on the Frame and run under Proton 11 ARM64**, with its output checked against `c97b116f…`.
+
+### Trimmed function map and configurable tool paths (Phase 1, 2026-11-22)
+
+**Trimmed map** (`external/OpenSA2/sa2mr/map/`, new files):
+- `trim_map.py` writes `function-map-trimmed.json` (1.37 MB) from Ghidra's map. Per function it keeps `address`, `size`, `region` and `jump_tables`. At the top it keeps the exe sha256, image base, entry points, WinMain, memory map and Ghidra version. All names, imports, string clusters and every other per-function field are dropped.
+- `restore_map.py` rebuilds a full-shape `sa2-recomp-function-map/v1`:
+  - names become `sub_<hex>`, the remill symbol;
+  - the imports are re-read from the exe with pefile, and are identical to Ghidra's;
+  - every other field gets Ghidra's "unknown" default (empty lists, 0, false).
+- **What the build reads from the map.** A traced run (a `sitecustomize` that logs each key read) shows the only per-function fields read from `rebuild_image.py` through `text_readset.py` are `address`, `size`, `region`, `name` and `jump_tables`. `name` only reaches build-log records, `armlist.json`'s `owner_name` and the string column of `function_table_whole.c`, which the runtime stores and never reads. Nothing downstream of the tables (perf_f80, the release links, lift_arm64) loads the map. The analysis and check tools (`tools/s4/xrefs.py`, `m7_inputs.py`, `import_surface.py` and others) do read the dropped fields, but they are not build steps.
+- **Result.** A scratch git worktree (`private/trimtest`) built from the restored map:
+  - `rebuild_image.py --jobs 12` took 781 s: map lift 234 s, compile 193 s, arms 227 s, extras 124 s.
+  - It gave **`LIFT_IR_OK` map 12683, arms 5711, extras 5646**, and a fold-code stamp identical to the main tree's.
+  - `drm_unwrap.py --companion` passed its digest gate.
+  - These outputs are byte-identical to the Ghidra-map build's: `mb_edges.c`, `extra_functions.c`, the companion `readset.json` and the overlay table. The `mb_edges.json` diff is only paths and wall time.
+  - `function_table_whole.c` (18,394 rows) differs only in the name strings and the timestamp.
+
+**Configurable paths** (upstream files; defaults unchanged, so the compile commands in the stamp are unchanged):
+- **`SA2_ZIG`**:
+  - `tools/env.sh` now keeps a preset value.
+  - These files honour it: `tools/spike/spikelib.py`, `tools/s7/f80_legalize.py`, `tools/s7/arm64_link.py`, `tools/s8/android_game.py`, `tools/s4/format_oracle.py`, `tools/s4/emulate_check.py`, `tools/s5/m7_synthetic.py`, `tools/oracle/run_oracle_probe.py` and `host/player/test_synth.sh`.
+  - `Documentation/scripts/tests/*` still hard-code the path.
+- **`SA2_REMILL_PREFIX` and `SA2_REMILL_MODE=unshare|direct`**:
+  - `tools/s3/whole_image/common.py` has a new `remill_cmd()`, which `lift_all.py`, `tools/s3/arms/lift_arms.py` and `tools/s4/lift_extra.py` use.
+  - In `direct` mode it runs `$PREFIX/bin/remill-lift-14` as is.
+  - remill-lift-14 has **no flag for the semantics search path**. It looks only in its compiled-in build dirs and in `/usr/local/share/remill/14/semantics`, `/usr/local/share/remill/14.0/semantics` and `/usr/share/remill/14.0/semantics`, and without them it aborts (rc 134).
+  - So `direct` needs either a remill built with its install prefix at the final path, a patched lift tool, or the semantics at one of those paths. With the semantics bind-mounted at `/usr/local/share/remill`, 405 sampled modules (400 map modules and 5 arm traces) gave byte-identical `.ll` in both modes.
+  - The Frame supports `unshare -Urm`, so `unshare` mode works there as it is.
+- **`SA2_STRIP`** (also `SA2_OBJCOPY`, `SA2_READELF`, `SA2_OBJDUMP`, and the prefix `SA2_CROSS`, default `aarch64-linux-gnu-`): `private/sa2mr/arm64/release_build_arm64.py` `tool()`.
