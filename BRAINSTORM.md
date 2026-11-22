@@ -159,6 +159,9 @@ No SA2/SADX VR or MR mod exists. This would be the first.
     - Throwing Sonic at the window, or jumping into it from the course, takes him back into the level.
   - **Open:** the user's verdict on the toy-sized inside, on the back view, and on `open` against `cut`
     glass. Sonic is hidden while your head is inside (v1).
+  - **Frame tests (2026-11-22):** inside is latched (you stay in the game when walking round the frame; you
+    leave back through the opening). Room Run objects are at half the game's size on the toy course (the
+    user's decision). Room Run prefers the most vertical of 9 seeds in small rooms.
 - **Moving diorama:** a table-sized slice of the stage that scrolls with Sonic, the only honest tabletop for linear stages.
 - **Comfort ladder:** diorama (default), then chase cam, then opt-in first-person (vignette, fixed horizon, no camera roll, grid cage). Marketing line: "the camera complaint is solved — *you* are the camera."
 - **User roadmap (2026-11-21), in order:**

@@ -522,3 +522,16 @@ See `host/xr/README.md`, "Fixes from the Frame's portal test".
     `roomrun/examples/batch_1000.txt`.
 - **Checks:** roomrun tests pass; the 1000-room batch gives 1000/1000 at both scales, 100% completable. `test_tweaks` passed;
   public check 0 failures; `RELEASE_BUILD_OK` (game) and `XR_BUILD_OK`.
+
+## Portal and Room Run, second Frame test (2026-11-22, `frame-place1`)
+
+See `host/xr/README.md`, "The Frame's second portal test" and "Room Run objects at the toy course's size".
+- **Crossing:** latched. In through the opening from the front, out only back through it; round the frame keeps you in. This
+  replaces the first fix, which left on any return to the front.
+- **Verticality:** `rr_generate` keeps the most vertical of the user's seed and the next 8 when the first isn't vertical enough
+  (stacked share plus a quarter of the deck range, at least 0.2). The Frame's case moved from a flat circle to a 6.37 m coil.
+- **Objects:** springs, dash panels and enemies at 0.5 of the game's size (`SA2_XR_ROOM_RUN_OBJECT_SCALE`). The player scales
+  their marked draws; vr-sonic gives each a scaled private copy of its collision shapes. The channel is version 12
+  (`rr_object_scale`).
+- **Files:** `host/xr/xr_portal.{h,cpp}`, `host/xr/xr_gpu.cpp`, `host/xr/xr_roomrun.cpp`, `host/xr/README.md`,
+  `host/sa2_vr_hands.h`, `runtime/tweaks/vr-sonic.c`. No upstream file.

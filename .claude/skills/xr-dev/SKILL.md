@@ -161,13 +161,20 @@ Read `external/OpenSA2/host/xr/README.md` first. It holds the measured camera fi
   - **Pause-menu tests need two Downs to reach VR / 2D VIEW** (Continue, Restart, then the item); one Down lands on
     Restart.
   - **Frame portal test (2026-11-22):**
-    - Leave on *any* return to the front side. Strict topology kept a head "inside" after it stepped out over a
-      small window's edge, and then showed the back view instead of the room.
+    - **Crossing is latched (second Frame test):** in front to back through the opening, out only back to front
+      through it, round the frame keeps you in (the user's wish). The original "back view instead of the room" came
+      from any crossing through the opening toggling the state. The first fix, leaving on any return to the front,
+      lost "stay in the game".
     - Command 2 (the flat floor) must carry the hand's height, or drops and throws start from the floor.
     - The course: `rr_generate` tries more seeds, then grows the rectangle. Reproduce generator failures with
       `roomrun-gen --area W,D,UX,UY --sonic-cm 14.8 --player-r 0.3`.
-  - **Room Run objects are the game's size** (SET scale is behaviour; KASOKU's collision is a fixed 10 × 4.44 units). On
-    the toy course they overhang, and whether to shrink them is the user's call.
+  - **Room Run objects at half size (the user's decision):**
+    - draws: `T(0,0,−60) S(k) T(0,0,60)` (the trampoline puts the object at (0,0,−60));
+    - collision: a scaled private copy of each object's shape array (CollisionInfo `+0x0C`, count `+0x06`, range
+      `+0x08`; 48-byte shapes);
+    - `SA2_XR_ROOM_RUN_OBJECT_SCALE`, channel version 12.
+  - **Course choice:** the generator's pick flips with tiny scale changes (10.12 vs 10.14 cm). The player keeps the
+    most vertical of 9 seeds when the first isn't vertical.
 
 ## Frame performance (measured 2026-11-21)
 - Seated VR with about 1,090 world draws: 59.9 fps.
