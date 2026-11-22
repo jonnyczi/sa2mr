@@ -13,6 +13,7 @@ A VR / mixed-reality mod of **Sonic Adventure 2** for the **Valve Steam Frame**,
 
 **Git (user decision, 2026-11-21): commit your work at verified, stable points.**
 - **The project root** is a git repo on `main`. `external/`, `media/` (game screenshots), toolchains and logs are gitignored.
+- **Push the root's `main` to `origin` (`git@github.com:jonnyczi/sa2mr.git`) after each commit** (user decision, 2026-11-22). OpenSA2's branches have no remote of ours and are not pushed.
 - **`external/OpenSA2`** is its own checkout. Our changes go on its **`sa2mr`** branch; `main` tracks upstream. Follow its `AGENTS.md`: no tool or assistant attribution trailers, and run `python3 tools/public_check.py` before every commit.
 - **Never commit proprietary code or assets:**
   - no SEGA exe, or anything generated or translated from it;
