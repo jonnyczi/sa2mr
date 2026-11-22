@@ -1,0 +1,22 @@
+# Pinned inputs of the Steam Frame toolchain (build.sh), besides remill's own
+# (build-env/remill-arm64/sources.lock, copied into the output's toolchain.lock). Shell-sourceable.
+# Each entry: <name> <file> <sha256> <url>. All open source; nothing here is SEGA's.
+#   zig          the aarch64-linux compiler the translation chain calls as $SA2_ZIG
+#   iced-x86     sdist; the wheel is built from it (PyPI has no aarch64 wheel), Cargo deps pinned by
+#                iced-x86-1.21.0.Cargo.lock (crates.io checksums)
+#   pefile       pure-Python wheel
+#   rust-*       the Rust toolchain that builds the iced-x86 extension (x86_64 host, aarch64 std)
+INPUTS='
+zig          zig-aarch64-linux-0.15.2.tar.xz                  958ed7d1e00d0ea76590d27666efbf7a932281b3d7ba0c6b01b0ff26498f667f https://ziglang.org/download/0.15.2/zig-aarch64-linux-0.15.2.tar.xz
+iced-x86     iced-x86-1.21.0.tar.gz                           1248b00647dd83b911214895eafbeb2642caa3007de2796ffad1c69aa6d8cd87 https://files.pythonhosted.org/packages/53/7a/0838fc746873d8b46da350fd3d6caf07f16a1c049712c72838d2c26de681/iced-x86-1.21.0.tar.gz
+pefile       pefile-2024.8.26-py3-none-any.whl                76f8b485dcd3b1bb8166f1128d395fa3d87af26360c2358fb75b80019b957c6f https://files.pythonhosted.org/packages/54/16/12b82f791c7f50ddec566873d5bdd245baa1491bac11d15ffb98aecc8f8b/pefile-2024.8.26-py3-none-any.whl
+rustc        rustc-1.90.0-x86_64-unknown-linux-gnu.tar.xz     48c2a42de9e92fcae8c24568f5fe40d5734696a6f80e83cc6d46eef1a78f13c9 https://static.rust-lang.org/dist/rustc-1.90.0-x86_64-unknown-linux-gnu.tar.xz
+cargo        cargo-1.90.0-x86_64-unknown-linux-gnu.tar.xz     9853db03d68578a30972e2755c89c66aec035fec641cf8f3a7117c81eec2578d https://static.rust-lang.org/dist/cargo-1.90.0-x86_64-unknown-linux-gnu.tar.xz
+rust-std-x86 rust-std-1.90.0-x86_64-unknown-linux-gnu.tar.xz  663f4ab7945b392d5e5294dec1b050a66820a20e86f084ec37eeb0f2f7ff5569 https://static.rust-lang.org/dist/rust-std-1.90.0-x86_64-unknown-linux-gnu.tar.xz
+rust-std-a64 rust-std-1.90.0-aarch64-unknown-linux-gnu.tar.xz 4952abb7d9d3ed7cea4f7ea44dcb23dc67631fae4ac44a5f059b90a4b5e9223f https://static.rust-lang.org/dist/rust-std-1.90.0-aarch64-unknown-linux-gnu.tar.xz
+'
+ZIG_DIR=zig-aarch64-linux-0.15.2
+ICED_VERSION=1.21.0
+PEFILE_VERSION=2024.8.26
+# the highest glibc the wheel may need (the Frame has 2.39; the sniper sysroot it links against has 2.31)
+MAX_GLIBC=2.31
