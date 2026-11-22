@@ -66,6 +66,8 @@ build-env/arm64/frame_deploy.sh log | fetch DIR | stop
   relay and the player on 5-7 (log "CPU placement"); don't put `SA2_GUEST_HOST_CPUS` in game.env or `taskset` in
   `FRAME_ENV` any more. The aarch64 game is built `-mcpu=cortex_a720` (`lift_arm64.py`); the launcher checks `share/cpu-needs.txt`
   against the CPU's HWCAPs and refuses by name (`SA2_CPU_CHECK=0` tries anyway). A check inside the game is too late.
+- **Wild Canyon (round 4):** game-CPU bound on the A720s (13-17 ms a frame) with `draw-distance` on; `frame_perf.sh wcsuite`
+  is its headless A/B (placement, draw distance, alt builds).
 - **Profiling on the headset:** scratchpad `frameprof/frame_perf.sh` (push, info, suite, live, fetch; a bundled Debian
   arm64 perf). Ask before running anything on the Frame.
 - **Frame specifics to expect:**

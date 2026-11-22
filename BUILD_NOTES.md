@@ -618,3 +618,37 @@ failures. Upstream files edited this round: `runtime/sa2_d3d9.c`, `host/sa2_pres
 - **The Frame after this build:** take `SA2_GUEST_HOST_CPUS` out of its `share/game.env` and `taskset` out of `FRAME_ENV`:
   the launcher places both (its log says "CPU placement: ..."). The aarch64 game is built for `cortex_a720`; the launcher
   refuses a CPU that lacks one of its features by name (`SA2_CPU_CHECK=0` tries anyway).
+
+## Performance round 4: Wild Canyon (2026-11-22, Frame session `frame-perf4`)
+
+**The Frame session** (auto-placement working: game 2-3, launcher/relay/player 5-7): 58.6 fps; Wild Canyon (level 16,
+Knuckles, seated with some first person and 2D) dipped to 47.7-55.8 fps, with the game's CPU at 13-16.8 ms a frame on
+the A720s and the relay rarely waiting on the player: the game is the limit there. 650-930 KB and 9.7-12.7k D3D9 calls a
+frame.
+
+**Measuring Wild Canyon on x86:** the City Escape export replayed with `SA2_PRACTICE=16` and vr-level-culling's new
+measurement hook `SA2_VR_CULL_TEST_TP=F:x,y,z;...`, which puts player 1 at the Frame session's own places (from its
+`game camera record` lines; scratchpad `wc_tp.txt`) at given frames; 760-800 KB and 10.5-11.7k calls a frame, close to the
+Frame's heavy parts. Every replay MATCHed.
+
+| Finding / change | Measured (x86, game CPU ms a tick over ticks 1200-2700) |
+|---|---|
+| **draw-distance** (in the Frame's hand-kept game.env, not the VR release's): objects load and run at twice the distance | 7.33 at 2× (the tweak), 6.56 at 1.5×, 6.17 at 1.25×, 5.2 off: the tweak is a third of Wild Canyon's game frame. New `SA2_DRAW_DISTANCE_SCALE` (1-4, default 2 as before) in `runtime/tweaks/draw-distance.c` |
+| vr-level-culling in Wild Canyon (the ground-list path, `0x0047CAE0`): only 12 COLs a frame added, and the land draws' model clip off | the ground list now takes the seated view cone and the 2D window's own view; the land draws keep the model clip on in a seated level and ask the cone per model (vr-object-culling's frustum-test wraps call `sa2_vlc_model_kept`): 25 models a frame outside the game's view, 12 kept. Small in Wild Canyon (about −4%); flat-equivalent cost is within noise of VR seated |
+| the walk-through window from outside: the cone narrowed to the pyramid from the head through the glass (hands file **version 13**, `view_cone_deg`; margin `SA2_XR_PORTAL_CONE_MARGIN`, 10°) | City Escape live under Monado: 650 → 380 KB a frame, game CPU 7.2 → 5.5 ms (−23%); the portal's eye dumps pixel-identical (3 frames) |
+| VR player: `eye_projection`'s tangents memoised per view; `draw_inner`'s copy of a draw assigned over a kept one (no allocation per draw) | the player on the City Escape stream: instructions −6.2%, cycles −5%; eye dumps pixel-identical. With round 3's census off, about −17% in all |
+| launcher: `SA2_CPU_PLAN=game-top` (the game on the X4, the player on 2-6) | for the Frame A/B: the game is the heavier thread in Wild Canyon (round 3: the X4 runs it 21% faster) |
+| hot-function link order (`private/sa2mr/order_link.py`, objects hottest first) | x86: iTLB misses −14%, cycles unchanged; an arm64 build (`rel-a64-ord`) for the Frame A/B (it also removes far-branch veneers to the runtime) |
+
+**Not done:** the CRI reverb (8.8% of the game in Wild Canyon, on the audio thread): a bit-exact NEON body is a project
+of its own (the differential harness `tools/s8/native_kernels/cri_dsp_diff.c` has to hold it); `prepare_draw`'s
+per-draw zeroing of uniform slots (`pack_uniforms`, about 2% of the player).
+
+**Files:** `runtime/tweaks/vr-level-culling.c`, `runtime/tweaks/vr-object-culling.c`, `runtime/tweaks/draw-distance.c`
+(upstream tweak: the scale setting), `host/sa2_vr_hands.h` (v13), `host/xr/xr_gpu.cpp` (`write_view_cone`,
+`portal_cone`, `eye_projection`, `draw_inner`), `host/launch/sa2_cpu_place.h`, `host/launch/test_cpu_place.cpp`,
+`host/launch/sa2_launch.cpp`; private drivers `private/sa2mr/order_link.py`.
+**Checks:** `test_tweaks` (with draw-distance's) 150 passed incl. `CPU_PLACE_TEST_OK` and the relay tests;
+`TEST_D3D9GPU_OK 5445`; `test_stream` 147; flat `SA2_SELFTEST_OK` (offscreen, menu at tick 3575); `XR_BUILD_OK`;
+public check 0 failures.
+- **The Frame's game.env:** drop `draw-distance` from `SA2_TWEAKS` (or add `SA2_DRAW_DISTANCE_SCALE=1.25`) for Wild Canyon.
