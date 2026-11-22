@@ -772,3 +772,28 @@ See `host/xr/README.md`, "Dynamic resolution and the Frame's foveation".
   `zstd` in the container). Public check passes.
 - **Upstream files modified:** `host/d3d9gpu/d9g_gpu.h`, `host/d3d9gpu/d9g_gpu_sdl.cpp` (clear_lazy; the flat
   player never calls it), `host/launch/sa2_relay.{h,cpp}`, `host/launch/sa2_launch.cpp`.
+- **Correction (round 9):** round 8 read frame-60hz's dips as the game's; `pace.tsv`'s `ready_s` is after the player's
+  own work, so that reading did not hold. Round 9's join of `game_frames.tsv` and `pace.tsv` shows the player.
+
+## Performance round 9: the dips are the player's main thread (2026-11-22, `frame-r8`, 03e1c1ca)
+
+- **Per frame (game_frames.tsv joined with pace.tsv, one clock):** at a steady 60 the game's frame is ready at the
+  player 34 ms after it reaches the relay (the lead of 2). In the dips (5 s windows 50-54 and 40-42 fps) that grows to
+  42-56 ms and the player's interval to 20-25 ms, while the game's CPU a frame (all its threads) is 8-10 ms (9-15 ms
+  in frames 9900-10500): the game's 25+ ms gaps are it waiting for the pace's credits.
+- **The player in the dips:** its main thread 860-930 ms of CPU a second (live capture samples 9-14), 110 ms/s more
+  waiting to run, 1000+ preemptions a second; SteamVR's RenderThread (SCHED_RR 80, CPUs 4-6) 130-140 ms/s. Its
+  timing: 22-26 ms a frame, draws 6.5-12 ms for 2000-3400 draws (about 3.5 µs a draw), SDL's Present 2-5 ms (the
+  wait for the frame two back on the GPU: `waits` = `submits` in the device counters), the XR hand-over 1-3.7 ms.
+  Profile: `Device::execute_draw` 79% inclusive (prepare_draw 26%, SDL's binds and descriptor sets about 15%), the
+  stream's parse 6%, two clock reads a draw for `SA2_XR_TIMING` 4.5%.
+- **Clocks:** the A720s 2-4 averaged 2.58 GHz (of 3.15) and the X4 2.87 (of 3.05) during the capture, CPU 3 at
+  92-96 °C: thermal limits take about 18% off the player's cores.
+- **The game:** the CRI streaming thread (reverb `sub_843460`) 80-110 ms/s, about 2 ms a frame on the serial path;
+  running it beside the main thread would break the runtime's one-guest-thread-at-a-time design (determinism), so
+  not done. memfast was measured before (no gain on the Frame).
+- **Changes:** the player's main thread off SteamVR's real-time CPUs (`SA2_XR_MAIN_CPUS`, from the launcher's
+  placement: 2-3 by default, the X4 under `SA2_CPU_PLAN=game-mid`); `SA2_XR_TIMING` times one draw in 8.
+  `host/launch/sa2_cpu_place.h`, `test_cpu_place.cpp`, `sa2_launch.cpp`, `host/xr/xr_gpu.cpp`.
+- **Verified:** XR_BUILD_OK; test_cpu_place passes (game-top: main 2-3; game-mid: main 7); Monado: "the player's main
+  thread on CPUs 2-3", 59.6 fps.
