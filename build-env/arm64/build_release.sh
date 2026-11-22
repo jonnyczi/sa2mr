@@ -59,6 +59,11 @@ rm -f "$HERE/pins.json"
 "$X" '.venv/bin/python private/sa2mr/arm64/arm64_pins.py --out private/sa2mr/arm64/pins.json'
 mv "$R/private/sa2mr/arm64/pins.json" "$HERE/pins.json"
 
+step "the hot-function link order (from the perf profiles under private/sa2mr/arm64/hot/profiles, if any)"
+if ls "$R"/private/sa2mr/arm64/hot/profiles/*.txt >/dev/null 2>&1; then
+  "$ROOT/build-env/run.sh" 'source tools/env.sh; .venv/bin/python private/sa2mr/arm64/hot_order.py'
+fi
+
 step "the release"
 "$X" 'source tools/env.sh; .venv/bin/python private/sa2mr/arm64/release_build_arm64.py'
 

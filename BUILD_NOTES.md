@@ -665,3 +665,35 @@ See `host/xr/README.md`, "Eye resolution".
   sizes are scaled into them. The HUD, the bubble and the mono window stay at the game's size.
 - **Measured on x86:** the GPU drain per frame is 1.5 ms at 720p and 2.8 ms at 2160². The Frame check is still to do.
 - **Files:** `host/xr/xr_gpu.cpp`, `host/xr/README.md`. The flat player and d3d9gpu are unchanged.
+
+## Performance round 5: the game on the X4, hot-first link, Armv8.2 (2026-11-22)
+
+From the Frame's headless suite (`frame-perf5`, every replay MATCHed) and the 2160² eye run (`frame-eyeres1`, 59.6 fps,
+two City Escape dips at 13.3-13.75 ms of game CPU on the A720s):
+
+| Frame replay (game CPU ms a tick, heavy part) | A720 2-3 | X4 7 |
+|---|---|---|
+| City Escape | 10.63 / 10.67 | 8.67 / 8.70 (−18%) |
+| Wild Canyon (draw-distance 2×) | 11.53 / 11.47 | 9.76 / 9.71 (−15%) |
+| Wild Canyon, draw-distance 1.25× | 9.19 / 9.28 | 7.93 / 7.90 |
+| Wild Canyon, generic armv8.0 build | 11.54 / 11.37 | |
+| Wild Canyon, hot-function order | 11.04 / 11.06 (−4%) | |
+
+The player's render thread used about 165 ms of CPU a second on the X4 in the live capture (`live_145442`), so it has room
+on an A720.
+- **Default placement is now game-top** (`host/launch/sa2_cpu_place.h`): the game alone on the top cluster (the X4), the
+  launcher, its relay and the player on every other big CPU (2-6; the scheduler keeps the player's thread off the CPU
+  SteamVR's RenderThread is on); never the A520s. `SA2_CPU_PLAN=game-mid` is round 3's plan. Unit test updated.
+- **Hot-first link in the release:** `private/sa2mr/arm64/hot_order.py` writes `private/sa2mr/arm64/hot/hot_order.txt`
+  from the perf reports in `private/sa2mr/arm64/hot/profiles/` (the Frame's City Escape and Wild Canyon replays and x86's;
+  the same profiles give the same file); `release_build_arm64.py`'s game step links the lifted objects in that order and
+  records the file's sha256 (`link.state` "hot_order"); `build_release.sh` regenerates the file first. Derived from
+  the game: private, never committed.
+- **Armv8.2-A instead of cortex_a720:** cortex_a720 measured no faster than generic, and would refuse older cores (Quest's
+  A78C). `lift_arm64.py`'s default is now `-mcpu=generic+v8_2a` (LSE, RDM, CRC); `share/cpu-needs.txt` follows the flags
+  (`asimd atomics asimdrdm crc32`); the launcher's table gained `crc32`.
+- **Checks:** `CPU_PLACE_TEST_OK` (game-top 7 / 2-6 by default, game-mid 2-3 / 5-7), `test_tweaks` and the relay tests
+  140 passed, public check 0 failures, flat `SA2_SELFTEST_OK` (offscreen, menu at tick 3585). arm64:
+  `release_build_arm64.py --only game,players,launch,assemble,package` from the committed tree (782333f) plus this round:
+  `RELEASE_BUILD_ARM64_OK`, hot order 1328 of 24040 objects first, tarball sha256 `8e657c1a…` (not deployed); under QEMU
+  `SA2_SELFTEST_OK` (menu at tick 3572); `QEMU_CPU=cortex-a53` (Armv8.0) is refused by name, cortex-a76 starts.

@@ -62,10 +62,12 @@ build-env/arm64/frame_deploy.sh log | fetch DIR | stop
   - **Flat mode has no gamepad on the Frame:** the controllers act as laser pointers, which shows the touch overlay. Use VR for input.
   - Controller input needs the OpenXR session *focused*: the SteamVR dashboard must be closed.
 - **CPUs (measured 2026-11-22):** A520 cpu0-1 (capacity 216), A720 cpu2-4 (855, 3.15 GHz), A720 cpu5-6 (803), X4 cpu7
-  (1024, 3.05 GHz). SteamVR's RenderThread is SCHED_RR 80 on 4-6. The launcher places the game on 2-3 and itself, the
-  relay and the player on 5-7 (log "CPU placement"); don't put `SA2_GUEST_HOST_CPUS` in game.env or `taskset` in
-  `FRAME_ENV` any more. The aarch64 game is built `-mcpu=cortex_a720` (`lift_arm64.py`); the launcher checks `share/cpu-needs.txt`
-  against the CPU's HWCAPs and refuses by name (`SA2_CPU_CHECK=0` tries anyway). A check inside the game is too late.
+  (1024, 3.05 GHz). SteamVR's RenderThread is SCHED_RR 80 on 4-6. The launcher places the game on the X4 (7) and itself, the
+  relay and the player on 2-6 (log "CPU placement"; round 5; `SA2_CPU_PLAN=game-mid` is the older game 2-3 / player 5-7);
+  don't put `SA2_GUEST_HOST_CPUS` in game.env or `taskset` in `FRAME_ENV`. The aarch64 game is built for Armv8.2-A
+  (`-mcpu=generic+v8_2a`, `lift_arm64.py`; cortex_a720 measured no faster) and linked hottest-first (`hot_order.py`, −4%
+  on the Frame); the launcher checks `share/cpu-needs.txt` against the CPU's HWCAPs and refuses by name
+  (`SA2_CPU_CHECK=0` tries anyway). A check inside the game is too late.
 - **Wild Canyon (round 4):** game-CPU bound on the A720s (13-17 ms a frame) with `draw-distance` on; `frame_perf.sh wcsuite`
   is its headless A/B (placement, draw distance, alt builds).
   - **Results (frame-perf5, 2026-11-22), game ms a tick on an A720:**

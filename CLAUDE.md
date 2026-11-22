@@ -37,7 +37,7 @@ A VR / mixed-reality mod of **Sonic Adventure 2** for the **Valve Steam Frame**,
 - **x86_64 builds:** Docker image `opensa2-build` (Debian 13, matching OpenSA2's `tools/pins.json`), from `build-env/Dockerfile`. Run things with `build-env/run.sh '<cmd>'`, which mounts the repo at `/work`. Both containers also mount `roomrun/` read only at `/roomrun`, so `host/xr/build.sh` links the generator into the VR player. Always `source tools/env.sh` first.
 - **aarch64 builds:** `build-env/cross/` (cross container `opensa2-cross`) and `build-env/arm64/` (`build_release.sh`, `frame_deploy.sh`, sysroot, pins, `test/` QEMU bench). The drivers are in `external/OpenSA2/private/sa2mr/arm64/`.
   - Output: `external/OpenSA2/private/generated/s7/release/linux-aarch64/` and `sa2mr-linux-aarch64.tar.gz`.
-  - The lifted image is built for the Frame's CPU (`-mcpu=cortex_a720`) by `private/sa2mr/arm64/lift_arm64.py`; the launcher places the game and the player on the right cores itself (BUILD_NOTES "Performance round 3").
+  - The lifted image is built for Armv8.2-A (`-mcpu=generic+v8_2a`) by `private/sa2mr/arm64/lift_arm64.py` and linked hottest-functions-first (`hot_order.py`, from profiles under `private/sa2mr/arm64/hot/`); the launcher places the game on the X4 and the player on the other big cores itself (BUILD_NOTES "Performance round 5").
   - Passes `SA2_SELFTEST_OK` under QEMU. **Not yet run on a real Frame.**
 - **Running host binaries** needs `steam-run` (FHS) and `VK_DRIVER_FILES=/run/opengl-driver/share/vulkan/icd.d/radeon_icd.x86_64.json`. Without it the Radeon 890M appears twice and d3d9gpu refuses to create a device. The scripts below set both.
 - **SA2 game files:** `~/.local/share/Steam/steamapps/common/Sonic Adventure 2`.

@@ -217,7 +217,7 @@ Read `external/OpenSA2/host/xr/README.md` first. It holds the measured camera fi
   game.env) costs a third of its game frame: `SA2_DRAW_DISTANCE_SCALE=1.25` or drop it. Measure a stage headless by
   `SA2_PRACTICE=<level>` + `SA2_VR_CULL_TEST_TP=F:x,y,z;...` (player 1 put at a Frame session's places).
   The portal from outside sends its own cone (hands **v13** `view_cone_deg`, −23% game CPU in City Escape).
-  `SA2_CPU_PLAN=game-top` puts the game on the X4 for the A/B.
+  Round 5: the game on the X4 is the default (`SA2_CPU_PLAN=game-mid` the old plan); the Frame replays run it 18% faster there.
 - **Proposals for xr_gpu.cpp's owner:** cache `eye_P` per frame (a `tan` per eye per draw: 1.1% on the Frame);
   avoid copying each draw's `Values` in `draw_inner` (about 6% of the player offline).
 
