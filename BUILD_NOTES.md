@@ -565,3 +565,56 @@ See `host/xr/README.md`, "Every character, and sounds in the room", and `docs/vr
 - **Files:** `runtime/tweaks/vr-sonic.c`, `runtime/tweaks/hide-upgrade-models.c`, `docs/vr-game-hooks.md`,
   `host/xr/README.md`.
 - **Checks:** `test_tweaks` 137 passed; public check 0 failures; flat `SA2_SELFTEST_OK` (offscreen); `RELEASE_BUILD_OK`.
+
+## Performance round 3: placement, culling, call paths (2026-11-22)
+
+Goal: a steady 60 fps on the Frame in City Escape's heavy parts (and Wild Canyon). The Frame logs (`frame-perf2`,
+`frame-portal1`, `frame-place1..3`) show two heavy single threads, run as a pipeline: the game's guest threads (they
+run one at a time under the guest lock) and the VR player's render thread. Each has to fit 16.7 ms on its own core.
+
+**Measuring.** x86: the recorded City Escape session replayed headless (`tools/s7/replay_export.py`, VR settings, the
+recorder on), pinned to one core, `perf stat` cycles and instructions over the whole run, "game CPU ms a tick" over ticks
+1200-2700 (scratchpad `frameprof/replay_export.py`, a patched copy; `vb.sh`, with `fakeview` standing in for the VR
+player's view file). Every replay below MATCHed the session. The Frame: `scratchpad/frameprof/frame_perf.sh` (headless
+replays on the headset, a bundled arm64 perf, a live per-thread sampler with run-queue wait times).
+
+**The Frame's CPUs** (`info.txt`): A520 cpu0-1 (capacity 216), A720 cpu2-4 (855, 3.15 GHz), A720 cpu5-6 (803),
+X4 cpu7 (1024, but 3.05 GHz: rank by `cpu_capacity`, not the clock). Headless game CPU a tick in the heavy part:
+X4 10.0 ms, unpinned 12.7-13.2, an A720 next to SteamVR's real-time render thread 12.6 (14.1 wall), an A520 49.
+
+| Change | Where | x86 measured | Status |
+|---|---|---|---|
+| (a) CPU placement: game on the A720s off SteamVR's render-thread CPUs (2-3), launcher/relay/player on the X4 + the rest (5-7), never the A520s | `host/launch/sa2_cpu_place.h` (new), `sa2_launch.cpp`; test `host/launch/test_cpu_place.cpp`, `Documentation/scripts/tests/test_cpu_place.py` | the Frame's layout reproduced from a fake sysfs/proc (`CPU_PLACE_TEST_OK`); x86 (all 1024) places nothing | on by default on aarch64 and with `SA2_XR`; `SA2_CPU_PLACE=0` off, `SA2_GAME_CPUS`, `SA2_PLAYER_CPUS`, `SA2_CPU_AVOID` override; game.env's `SA2_GUEST_HOST_CPUS` wins |
+| (b) the mono 2D window keeps no extra level pieces (`view_ok` 2) | `host/xr/xr_gpu.cpp` (`write_view_cone` only), `runtime/tweaks/vr-level-culling.c`, `host/sa2_vr_hands.h` (comment; layout unchanged, still v12) | game CPU 7.7-8.7 → 5.6-6.1 ms a tick (−28%), 785 → 562 KB and 15.2k → 9.8k D3D9 calls a frame | done; the portal keeps its cone (its view moves with the head) |
+| (c) D3D9 dispatch: O(1) row table, one argument read, inline listed check | `runtime/sa2_d3d9.c` | instructions −8.7% (325 → 297 G), cycles about −5%; `d3d9_native` 5.9% → 2.3% of samples | done |
+| (d) recorder: the per-call clear no longer zeroes the 8 blob slots | `host/sa2_present_rec.c` | `memset` 1.9% → 0.07% of samples; cycles about −2% (inside the noise) | done |
+| (e) `fesetround` skipped when the mode is unchanged | `tools/s7/f80_shims.c` | none: the game changes the mode on nearly every call (`__fesetround` stayed at 2%) | dropped; that file is pinned by the arm64 receipts anyway |
+| (f) `-mcpu=cortex_a720` for the aarch64 lifted image and runtime; the launcher refuses a CPU without its features | `private/sa2mr/arm64/lift_arm64.py` (new driver), `release_build_arm64.py` (writes `share/cpu-needs.txt`), `host/launch/sa2_cpu_needs.h` (new), `sa2_launch.cpp`, `build-env/arm64/build_release.sh` | not measurable on x86 or QEMU; QEMU `-cpu cortex-a76` is refused by name, a check inside the game came too late (its musl startup already died of SIGILL) | built; needs a Frame A/B |
+| (g) the VR player's device keeps no draw-state census (`SA2_D3D9GPU_CENSUS=0`, set by the launcher for `SA2_XR` only) | `host/d3d9gpu/d9g.h`, `d9g_device.cpp`, `d9g_device_draw.cpp`, `sa2_launch.cpp` | the player replaying the City Escape stream (2,400 frames, synthetic eyes): instructions −5.7%, cycles 91.4 → 79.6 G (−13%) | done; the flat player still counts |
+| (h) the VR player stretches its sound (up to 10% slower) while the device queue is under 40 ms (`SA2_AUDIO_STRETCH=1`, set by the launcher for `SA2_XR`) | `host/player/player.cpp`, `sa2_launch.cpp` | engaged under a dummy audio device | done; flat sound unchanged |
+
+**All of it together** (the same replay, seated, no VR player's view file; two runs each): game CPU 8.9-9.9 → 8.1 ms a
+tick, instructions 323-329 → 294-295 G (−9.6%); with the mono window's view, 5.7 ms a tick.
+
+**Dropped after measuring:** memfast (the inlined guest-memory fast path): x86 −2.6% cycles inside the noise, the Frame
+12.65 vs 12.95 ms a tick, and the binary 34% larger. On the Frame the memory accessors are a quarter of the game's
+samples, but the cost is the loads' cache misses, not the call.
+
+**Left (largest first):** the CRI reverb (7.5% of the game on the X4, 13.6% on the A520 that took the audio thread);
+the player's per-draw work (`prepare_draw`, the XR wrapper's copy of each draw's `Values`, a `tan` per eye per draw in
+`eye_P`: proposals for the xr_gpu.cpp owner); hot-function ordering for the 147 MB of code (the aarch64 build also
+pays `__AArch64AbsLongThunk` veneers on calls to the runtime, about 1.3%).
+
+**Checks:** `TEST_D3D9GPU_OK 5445`, `test_stream` 147, `test_tweaks` 137, `CPU_PLACE_TEST_OK`, the relay tests, the
+d3d9 closed-world tests, the recorder tests (`test_s5_stream`: the 14 known zstd-binary failures; `test_s5_ctab_recorder`'s
+hard-coded `/workspace` zig path is environmental), flat `SA2_SELFTEST_OK` (offscreen, menu at tick 3586), public check 0
+failures. Upstream files edited this round: `runtime/sa2_d3d9.c`, `host/sa2_present_rec.c`, `host/launch/sa2_launch.cpp`,
+`host/d3d9gpu/d9g.h`, `host/d3d9gpu/d9g_device.cpp`, `host/d3d9gpu/d9g_device_draw.cpp`, `host/player/player.cpp`
+(each gated or behaviour-neutral for the flat player).
+- **arm64:** `release_build_arm64.py --only game,players,launch,assemble,package`: `RELEASE_BUILD_ARM64_OK`, tarball
+  sha256 `2ff0283c…` (not deployed). Under QEMU (8 cores, offscreen): `SA2_SELFTEST_OK` with the cortex_a720 game
+  (menu at tick 3572); with `QEMU_CPU=cortex-a76` the launcher refuses by name. A generic-CPU game of the same tree for
+  the Frame A/B: `private/generated/sa2mr-perf/rel-a64-generic/bin/sa2-game`.
+- **The Frame after this build:** take `SA2_GUEST_HOST_CPUS` out of its `share/game.env` and `taskset` out of `FRAME_ENV`:
+  the launcher places both (its log says "CPU placement: ..."). The aarch64 game is built for `cortex_a720`; the launcher
+  refuses a CPU that lacks one of its features by name (`SA2_CPU_CHECK=0` tries anyway).

@@ -61,6 +61,13 @@ build-env/arm64/frame_deploy.sh log | fetch DIR | stop
   - Settings are in the Frame's `~/Applications/sa2mr/share/game.env`. `deploy` keeps an edited copy. Use it for `SA2_TWEAKS`, `SA2_FOV_SCALE`, `SA2_REC_CAMERA=1`.
   - **Flat mode has no gamepad on the Frame:** the controllers act as laser pointers, which shows the touch overlay. Use VR for input.
   - Controller input needs the OpenXR session *focused*: the SteamVR dashboard must be closed.
+- **CPUs (measured 2026-11-22):** A520 cpu0-1 (capacity 216), A720 cpu2-4 (855, 3.15 GHz), A720 cpu5-6 (803), X4 cpu7
+  (1024, 3.05 GHz). SteamVR's RenderThread is SCHED_RR 80 on 4-6. The launcher places the game on 2-3 and itself, the
+  relay and the player on 5-7 (log "CPU placement"); don't put `SA2_GUEST_HOST_CPUS` in game.env or `taskset` in
+  `FRAME_ENV` any more. The aarch64 game is built `-mcpu=cortex_a720` (`lift_arm64.py`); the launcher checks `share/cpu-needs.txt`
+  against the CPU's HWCAPs and refuses by name (`SA2_CPU_CHECK=0` tries anyway). A check inside the game is too late.
+- **Profiling on the headset:** scratchpad `frameprof/frame_perf.sh` (push, info, suite, live, fetch; a bundled Debian
+  arm64 perf). Ask before running anything on the Frame.
 - **Frame specifics to expect:**
   - Mesa Turnip on Adreno 750 with a single queue (`tu_emulate_second_queue`).
   - SteamVR picks 72/90/120/144 Hz. **The user must set 120 Hz (or 60 Hz) in SteamVR** for the 60 fps game; 72 Hz judders (user-verified 2026-11-21). `XR_FB_display_refresh_rate` offers the app only 72 Hz.

@@ -50,7 +50,7 @@ EOF
 
 step "lifted image for aarch64-linux-musl, double f80 mode (24,040 modules)"
 if [ ! -f "$R/private/generated/s8/pc-double/linux-aarch64-obj/summary.json" ]; then
-  "$ROOT/build-env/run.sh" 'source tools/env.sh; .venv/bin/python tools/s8/perf_f80.py build --target aarch64-linux-musl --mode double --out private/generated/s8/pc-double/linux-aarch64-obj --jobs 8'
+  "$ROOT/build-env/run.sh" 'source tools/env.sh; .venv/bin/python private/sa2mr/arm64/lift_arm64.py --target aarch64-linux-musl --mode double --out private/generated/s8/pc-double/linux-aarch64-obj --jobs 8'
 fi
 
 step "host deps (SDL3, DXVK Native, dxbc-spirv, zstd, OpenXR loader) and the arm64 pins overlay"

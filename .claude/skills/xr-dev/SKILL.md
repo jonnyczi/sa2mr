@@ -195,6 +195,24 @@ Read `external/OpenSA2/host/xr/README.md` first. It holds the measured camera fi
 - The user says it is "much better", and deferred further performance work.
 - Remaining costs: the translated code's memory helpers and the audio DSP, both in the core translation.
 
+## Frame performance, round 3 (2026-11-22; BUILD_NOTES "Performance round 3")
+- **Two heavy single threads, a pipeline:** the game's guest threads (one at a time under the guest lock) and the player's
+  render thread. Each needs its own fast core; the slower one sets the frame rate. Below 60 the music breaks too (the
+  game makes one frame of sound per Present).
+- **Placement is the launcher's** (`host/launch/sa2_cpu_place.h`; aarch64 or `SA2_XR`): rank by `cpu_capacity` (the
+  Frame's X4 has the top capacity, not the top clock), no little cores, the game on the next cluster less SteamVR's
+  real-time render thread's CPUs (2-3), launcher/relay/player on the rest (5-7). Overrides `SA2_CPU_PLACE=0`,
+  `SA2_GAME_CPUS`, `SA2_PLAYER_CPUS`, `SA2_CPU_AVOID`. **Lessons:** a guest pinned to the X4 alone shared it with
+  threads it could not leave (55 fps); confining the rest to 0-6 put the player on the A520s (39 fps).
+- **The mono 2D window writes `view_ok` 2:** vr-level-culling keeps nothing beyond the game's view (−28% game CPU).
+  The portal keeps the cone.
+- **The VR player:** no draw-state census (`SA2_D3D9GPU_CENSUS=0`, −13% player cycles offline), sound stretched up to
+  10% under a 40 ms queue (`SA2_AUDIO_STRETCH=1`); both set by the launcher for `SA2_XR` only.
+- **Measure:** x86 headless replay (scratchpad `vb.sh`, `fakeview`); the Frame `scratchpad/frameprof/frame_perf.sh`
+  (`suite` headless A/B, `live` per-thread CPU and run-queue wait). Never run it on the Frame without the user's go-ahead.
+- **Proposals for xr_gpu.cpp's owner:** cache `eye_P` per frame (a `tan` per eye per draw: 1.1% on the Frame);
+  avoid copying each draw's `Values` in `draw_inner` (about 6% of the player offline).
+
 ## Open problems (update this list when they change)
 - **Level culling.** On PC the visible level is the GC land system, not `ListGroundForDrawing` (whose list is empty: `VisibleModelCount` 0 after the split at `0x4929D0`).
   - The GC land draw is at `0x4941C0`. It drops geometry through the sphere test `0x4926D0` (called from return address `0x4942A6`) and the clip distance.
