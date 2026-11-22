@@ -797,3 +797,30 @@ See `host/xr/README.md`, "Dynamic resolution and the Frame's foveation".
   `host/launch/sa2_cpu_place.h`, `test_cpu_place.cpp`, `sa2_launch.cpp`, `host/xr/xr_gpu.cpp`.
 - **Verified:** XR_BUILD_OK; test_cpu_place passes (game-top: main 2-3; game-mid: main 7); Monado: "the player's main
   thread on CPUs 2-3", 59.6 fps.
+
+## Performance round 10: the player's draw thread (2026-11-22)
+
+- **The split** (`host/xr/xr_queue.cpp`, README "The draw thread"): the main thread reads the stream and runs the
+  device (state, `prepare_draw`, uniform packing); a second thread makes the stereo decorator's and SDL_gpu's calls in
+  the same order, 48 draws behind. `Gpu::draw_owned` (new, `host/d3d9gpu/d9g_gpu.h`; the device calls it in
+  `d9g_device_draw.cpp`, the default draws at once as before) hands the queue a draw's values without a copy.
+  `SA2_XR_DRAW_THREAD=0` off.
+- **Smaller:** `prepare_draw` fills each sampler slot in place (a store-forwarding stall was 15% of its own time on
+  x86); `SA2_XR_TIMING` times one draw in 8 (round 9).
+- **Measured (x86, City Escape without VR culling, 1000-1330 draws a frame, the live path from a pipe):** whole stream
+  10.4 s to 7.7-8.1 s; heaviest 300 frames 5.52 ms a frame on one thread, then 3.4-3.6 ms on the main thread and
+  2.8-2.9 ms on the draw thread (2.6 and 2.2 µs a draw). A frame-wide batch first: the draws' values (4-5 KB each)
+  left the caches and both threads ran 66% more cycles in all; batches of 48 draws: 13% more cycles than one thread.
+- **The Frame, estimated:** frame-r8's player took about 7.3 µs a draw for the whole frame (25 ms at 3400 draws)
+  where x86 took 4.1; at that ratio the main thread would take about 4.7 µs a draw (16 ms at 3400 draws) and the draw
+  thread 4 µs: the heaviest truck-chase frames at about 60, the rest with room. Less CPU a frame should also mean less
+  throttling (the A720s ran at 2.58 GHz of 3.15 in frame-r8).
+- **Checks:** eyes byte-identical to before (4 dumps at 1600²); Monado 59.7 fps, and 59.7 with
+  `SA2_XR_TEST_GPU_MS=25` (audio queue 40 ms); pytest relay, cpu_place, d3d9gpu (`TEST_D3D9GPU_OK`) pass; test_s5_stream
+  14 and d3d9gpu_state 1 fail as before (no `zstd`, a decisions file missing in the container). Public check passes.
+- **From xelee (the user's Melee port):** its foveation is its own `VK_EXT_fragment_density_map` on its eye pass
+  (aurora `lib/xr/xr.cpp`, through a Dawn fork), beside SteamVR's; for us the Vulkan shim (`libsa2_xr_vk.so`) could
+  add one to SDL's eye passes. Its `AURORA_XR_BATCH` joins draws into one (a range table and per-draw constants in a
+  storage buffer): the next step for the per-draw cost on both threads.
+- **Upstream files modified:** `host/d3d9gpu/d9g_gpu.h` (draw_owned), `host/d3d9gpu/d9g_device_draw.cpp` (draw_owned,
+  the sampler slots); `host/xr/build.sh` (xr_queue).

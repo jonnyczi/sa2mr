@@ -176,6 +176,9 @@ Read `external/OpenSA2/host/xr/README.md` first. It holds the measured camera fi
     - **eye resolution:** the eyes have their own size (`SA2_XR_EYE_RES`, `SA2_XR_RES_SCALE`; README "Eye
       resolution"); Monado's maximum is 1920x1080, so test bigger sizes offline (`SA2_XR_SIM_FOV=100` for a square
       view, `SA2_XR_GPU_SYNC=1` with `SA2_XR_TIMING=1` for GPU time);
+    - **draw thread:** the d9g::Gpu calls run on "sa2-draws" (`xr_queue.cpp`; `SA2_XR_DRAW_THREAD=0` off); a hook that
+      changes XrGpu state in order with draws must go through `queue_post`. Measure the player offline through the
+      live path (`--video-fd`, no stream hashing) and outside steam-run so perf can attach;
     - **render passes:** `SA2_XR_TIMING=1` prints the eyes' passes and SDL's passes a frame; `SA2_XR_PROBE=<frames>`
       logs what breaks the eye pass; the eyes' clears are lazy (`SA2_XR_LAZY_CLEAR=0` off; `Gpu::clear_lazy`);
     - **late GPU frames:** the player skips frames the GPU has no room for (`SA2_XR_SKIP=0` waits) and the relay leads
