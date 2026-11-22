@@ -199,6 +199,10 @@ No SA2/SADX VR or MR mod exists. This would be the first.
 - Full-VR Chao-scale garden: maybe a teleport-only toggle later.
 - Live & Learn finale: replace with a static pose/photo mode, and watch music DMCA in clips.
 - Chao rides on Sonic's head into stages: v2.
+- **Back to these after performance (user, 2026-11-22):**
+  - Tails' mech is "a little buggy" when picked up and played in the room. Knuckles is verified on the Frame.
+  - First-person polish.
+  - Chao in Your Room improvements.
 
 ---
 
