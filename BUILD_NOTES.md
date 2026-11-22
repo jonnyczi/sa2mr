@@ -551,3 +551,17 @@ See `host/xr/README.md`, "The Frame's third portal test".
   `host/xr/README.md`, `runtime/tweaks/vr-sonic.c`. No upstream file.
 - **Checks:** `test_tweaks` 137 passed; public check 0 failures; flat `SA2_SELFTEST_OK` (offscreen); `RELEASE_BUILD_OK`,
   `XR_BUILD_OK`, `GLOVE_SPV_OK`.
+
+## Every character, room sounds (2026-11-22, `frame-place3`)
+
+See `host/xr/README.md`, "Every character, and sounds in the room", and `docs/vr-game-hooks.md` section 13.
+- **Characters:** vr-sonic wraps Knuckles_Main (`0x00728D70`, Knuckles and Rouge) and the walkers' main (`0x00741530`)
+  as well as Sonic_Main. First person hides each character's head node.
+- **Upstream file modified:** `runtime/tweaks/hide-upgrade-models.c` (already modified for Sonic). Its Knuckles, Rouge
+  and both walker display wraps now hand the call to `sa2_vr_sonic_display` first when vr-sonic is on; behaviour with
+  vr-sonic off is unchanged.
+- **Sounds:** vr-sonic wraps `0x00438230` (volume) and `0x004383A0` (pan) so that sounds in the room are placed next
+  to the camera.
+- **Files:** `runtime/tweaks/vr-sonic.c`, `runtime/tweaks/hide-upgrade-models.c`, `docs/vr-game-hooks.md`,
+  `host/xr/README.md`.
+- **Checks:** `test_tweaks` 137 passed; public check 0 failures; flat `SA2_SELFTEST_OK` (offscreen); `RELEASE_BUILD_OK`.

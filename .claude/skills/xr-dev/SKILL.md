@@ -173,6 +173,12 @@ Read `external/OpenSA2/host/xr/README.md` first. It holds the measured camera fi
     - collision: each object's shape array (CollisionInfo `+0x0C`, count `+0x06`, range `+0x08`; 48-byte shapes)
       scaled. **Scale a heap array in place:** the game frees it with the object, so a replacement pointer of ours
       trapped in HeapFree (frame-place2). Only static arrays (the dash panel's `0x00B43EAC`) are copied;
+    - **every character:** vr-sonic wraps the three player mains (`0x00717840`, `0x00728D70`, `0x00741530`) and
+      gets the four other player displays through hide-upgrade-models; head nodes per display in
+      docs/vr-game-hooks.md section 13. Test other characters with `STAGE=16` (Wild Canyon), `drylagoon`,
+      `missionstreet`;
+    - **room sounds:** positional sounds take their volume and pan from the camera location (`0x00438230`,
+      `0x004383A0`), so vr-sonic places a room sound next to the camera for those calls;
     - enemy displays test the **camera location** (`[0x01DD92B0 + 4*screen]`, `0x007983F0`), not the view matrix:
       the trampoline moves it next to the object for the call, as it does the view;
     - `SA2_XR_ROOM_RUN_OBJECT_SCALE`, channel version 12.
