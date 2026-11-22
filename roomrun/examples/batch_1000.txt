@@ -1,37 +1,37 @@
 Room Run batch: 1000 random rooms x 2 Sonic scales (seed 12345)
-player spots rejected up front (no free disk for even a minimal loop; app would ask the user to step aside): 67
+player spots rejected up front (no free disk for even a minimal loop; app would ask the user to step aside): 36
 
 === Sonic 10 cm (1 unit = 1.0 cm), speed scale 0.6 ===
-generated: 1000/1000   without fallback: 99.7%   critical path completable (all 32 bot runs): 100.0%   clearance ok: 100.0%
-no-fallback by room type:  hallway 100.0%  irregular 98.8%  l-shape 100.0%  rectangle 100.0%
-skeletons:  circle 8  coil 75  figure8 20  helix 14  perimeter 104  tower 779
-lap length m   p5 4.9  p50 14.4  p95 24.6
-expert lap s   p5 3.1  p50 11.6  p95 21.1
-average lap s  p5 3.1  p50 12.4  p95 22.5
-bad lap s      p5 3.5  p50 14.8  p95 27.3
-repairs: 176 total, 154 courses needed >=1 repair round
-final validation (32 runs x 3 laps per course): catch-net respawns 15226 in 678 courses; no-net falls (checkpoint restart) 0 in 0 courses
-gen time ms    p50 545  p95 1888  max 3557
-play mesh: collision triangles p50 4320  p95 6744  max 6996 (the game's pool 8191); pieces max 42 (64); steepest walkable deck facet p95 36.8  max 36.9 deg; largest slope change a station p95 0.079  max 0.271
-game objects: rings a course p5 20  p50 59  p95 99 (0 courses without); springs 3069 of 2099 spring modules (103 flights left out); dash panels 2843; dash ramps 54 (0 left out); grind rails 9106 (0 too steep: strip only)
-shape: lap per floor area m/m2 p5 0.78  p50 1.33  p95 1.92 | deck height max p50 1.50  p95 1.59 m, mean p50 0.97 m, range p50 1.11 m | tiers 1: 11%  2: 26%  3+: 62% | crossings p50 1  p95 3 | stacked stations p50 37% | smallest deck-to-deck gap where stacked: min 48.3  p5 49.0 units (888 courses stacked)
-validator flags per module (all candidates, before repair):  dash_panel 1  gap_jump 43  grind_rail 1  homing_chain 497  ramp 2  spiral_ramp 60  spring 14
-module usage in final courses:  accel_pad 871  dash_panel 1959  drop 3  gap_jump 54  grind_rail 3865  homing_chain 1194  loop 1346  ramp 1712  spiral_rail 5770  spiral_ramp 11871  spring 2099  start_line 1000  track 2842
+generated: 1000/1000   without fallback: 97.7%   critical path completable (all 32 bot runs): 100.0%   clearance ok: 100.0%
+no-fallback by room type:  hallway 100.0%  irregular 92.0%  l-shape 100.0%  rectangle 98.8%
+skeletons:  circle 25  coil 73  figure8 19  helix 14  perimeter 105  tower 764
+lap length m   p5 3.8  p50 14.2  p95 24.6
+expert lap s   p5 2.2  p50 11.4  p95 21.1
+average lap s  p5 2.2  p50 12.2  p95 22.5
+bad lap s      p5 2.3  p50 14.6  p95 27.2
+repairs: 171 total, 151 courses needed >=1 repair round
+final validation (32 runs x 3 laps per course): catch-net respawns 14999 in 669 courses; no-net falls (checkpoint restart) 0 in 0 courses
+gen time ms    p50 673  p95 2511  max 4472
+play mesh: collision triangles p50 4272  p95 6744  max 6996 (the game's pool 8191); pieces max 42 (64); steepest walkable deck facet p95 36.8  max 36.9 deg; largest slope change a station p95 0.078  max 0.271
+game objects: rings a course p5 17  p50 58  p95 99 (0 courses without); springs 3033 of 2055 spring modules (103 flights left out); dash panels 2785; dash ramps 53 (0 left out); grind rails 8947 (0 too steep: strip only)
+shape: lap per floor area m/m2 p5 0.71  p50 1.32  p95 1.92 | deck height max p50 1.50  p95 1.59 m, mean p50 0.96 m, range p50 1.11 m | tiers 1: 13%  2: 26%  3+: 61% | crossings p50 1  p95 3 | stacked stations p50 37% | smallest deck-to-deck gap where stacked: min 48.3  p5 49.0 units (870 courses stacked)
+validator flags per module (all candidates, before repair):  gap_jump 43  grind_rail 1  homing_chain 488  ramp 2  spiral_ramp 57  spring 14
+module usage in final courses:  accel_pad 856  dash_panel 1917  drop 3  gap_jump 53  grind_rail 3814  homing_chain 1175  loop 1326  ramp 1661  spiral_rail 5656  spiral_ramp 11652  spring 2055  start_line 1000  track 2797
 
 === Sonic 15 cm (1 unit = 1.5 cm), speed scale 0.6 ===
-generated: 1000/1000   without fallback: 100.0%   critical path completable (all 32 bot runs): 100.0%   clearance ok: 100.0%
-no-fallback by room type:  hallway 100.0%  irregular 100.0%  l-shape 100.0%  rectangle 100.0%
-skeletons:  circle 26  coil 22  figure8 8  helix 1  perimeter 256  tower 687
-lap length m   p5 3.2  p50 11.0  p95 24.2
-expert lap s   p5 1.0  p50 6.0  p95 12.7
-average lap s  p5 1.1  p50 6.3  p95 13.6
-bad lap s      p5 1.2  p50 7.3  p95 16.2
-repairs: 77 total, 72 courses needed >=1 repair round
-final validation (32 runs x 3 laps per course): catch-net respawns 7285 in 430 courses; no-net falls (checkpoint restart) 0 in 0 courses
-gen time ms    p50 156  p95 719  max 1683
-play mesh: collision triangles p50 2208  p95 4848  max 5196 (the game's pool 8191); pieces max 28 (64); steepest walkable deck facet p95 36.8  max 36.9 deg; largest slope change a station p95 0.077  max 0.415
-game objects: rings a course p5 11  p50 31  p95 66 (0 courses without); springs 1952 of 1000 spring modules (32 flights left out); dash panels 1540; dash ramps 0 (0 left out); grind rails 4916 (0 too steep: strip only)
-shape: lap per floor area m/m2 p5 0.51  p50 1.06  p95 1.44 | deck height max p50 1.44  p95 1.60 m, mean p50 0.96 m, range p50 0.93 m | tiers 1: 29%  2: 71%  3+: 0% | crossings p50 1  p95 3 | stacked stations p50 20% | smallest deck-to-deck gap where stacked: min 48.2  p5 48.8 units (713 courses stacked)
-validator flags per module (all candidates, before repair):  gap_jump 12  homing_chain 236  ramp 2  spiral_ramp 6  spring 5
-module usage in final courses:  accel_pad 527  dash_panel 937  grind_rail 2761  homing_chain 502  loop 599  ramp 345  spiral_rail 4304  spiral_ramp 7430  spring 1000  start_line 1000  track 1650
+generated: 1000/1000   without fallback: 99.0%   critical path completable (all 32 bot runs): 100.0%   clearance ok: 100.0%
+no-fallback by room type:  hallway 100.0%  irregular 96.8%  l-shape 100.0%  rectangle 99.2%
+skeletons:  circle 33  coil 22  figure8 8  helix 1  perimeter 255  tower 681
+lap length m   p5 2.9  p50 10.9  p95 24.1
+expert lap s   p5 1.0  p50 5.9  p95 12.7
+average lap s  p5 1.0  p50 6.2  p95 13.6
+bad lap s      p5 1.1  p50 7.1  p95 16.2
+repairs: 75 total, 70 courses needed >=1 repair round
+final validation (32 runs x 3 laps per course): catch-net respawns 7211 in 426 courses; no-net falls (checkpoint restart) 0 in 0 courses
+gen time ms    p50 196  p95 947  max 1824
+play mesh: collision triangles p50 2184  p95 4824  max 5196 (the game's pool 8191); pieces max 28 (64); steepest walkable deck facet p95 36.8  max 36.9 deg; largest slope change a station p95 0.077  max 0.415
+game objects: rings a course p5 11  p50 30  p95 66 (0 courses without); springs 1939 of 991 spring modules (32 flights left out); dash panels 1520; dash ramps 0 (0 left out); grind rails 4871 (0 too steep: strip only)
+shape: lap per floor area m/m2 p5 0.48  p50 1.06  p95 1.44 | deck height max p50 1.43  p95 1.60 m, mean p50 0.96 m, range p50 0.93 m | tiers 1: 29%  2: 71%  3+: 0% | crossings p50 1  p95 3 | stacked stations p50 20% | smallest deck-to-deck gap where stacked: min 48.2  p5 48.8 units (707 courses stacked)
+validator flags per module (all candidates, before repair):  gap_jump 12  homing_chain 233  ramp 2  spiral_ramp 6  spring 5
+module usage in final courses:  accel_pad 519  dash_panel 926  grind_rail 2737  homing_chain 498  loop 594  ramp 338  spiral_rail 4266  spiral_ramp 7352  spring 991  start_line 1000  track 1626
 

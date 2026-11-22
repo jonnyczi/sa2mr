@@ -216,19 +216,29 @@ GenResult generateCourse(const Room& input, uint64_t userSeed, const GenParams& 
         }
     }
     if (!have) {
-        Skeleton sk;
-        if (!fallbackSkeleton(room, res.free, gp, sk)) {
-            res.error = "not enough free floor for a loop: step closer to a wall or clear some space";
-            return res;
-        }
+        // the last resort: a plain loop, 1.5 m or more when it fits, else shorter (down to 0.6 m), so a small room
+        // still gets a course (the Frame, 2026-11-22: a 2 x 2 m area with 15 cm Sonic had none)
         Course c;
-        c.seed = seed;
-        c.kind = sk.kind;
-        c.sk = sk;
-        Rng frng(seed ^ 0xFA11BACCull);
-        c.prof = buildProfile(sk, room, gp, frng);
-        if (!assembleSafe(c.sk, c.prof, lib, gp, c.mods)) {
-            res.error = "not enough free floor for a loop (only a sub-1.5 m ring fits): step closer to a wall";
+        bool fit = false, anyLoop = false;
+        for (double minLap : {1.5, 1.2, 1.0, 0.8, 0.6}) {
+            Skeleton sk;
+            if (!fallbackSkeleton(room, res.free, gp, sk, minLap)) continue;
+            anyLoop = true;
+            c = Course{};
+            c.seed = seed;
+            c.kind = sk.kind;
+            c.sk = sk;
+            Rng frng(seed ^ 0xFA11BACCull);
+            c.prof = buildProfile(sk, room, gp, frng);
+            if (assembleSafe(c.sk, c.prof, lib, gp, c.mods)) {
+                fit = true;
+                if (gp.debug) std::fprintf(stderr, "[fallback] a %s of %.2f m (at least %.1f m)\n", sk.kind.c_str(), sk.lengthM(), minLap);
+                break;
+            }
+        }
+        if (!fit) {
+            res.error = anyLoop ? "not enough free floor for a loop (only a very short ring fits): step closer to a wall"
+                                : "not enough free floor for a loop: step closer to a wall or clear some space";
             return res;
         }
         bakeCourse(c, lib, gp);

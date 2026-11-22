@@ -505,3 +505,20 @@ See `host/xr/README.md`, "Walk-through window (portal)".
 - **Build note:** while another agent was mid-edit, `roomrun/src/generator.cpp` did not compile for a while.
   The XR build can take a snapshot instead with `SA2_ROOMRUN=/work/<dir>` (e.g. a `git archive HEAD roomrun`
   under `private/`).
+
+## Portal fixes from the Frame's test (2026-11-22, `frame-portal1`)
+
+See `host/xr/README.md`, "Fixes from the Frame's portal test".
+- **Inside showed what's behind the window:** the crossing now leaves on any return to the front side (stepping out over the
+  frame's edge kept the head "inside", and the next crossing turned that into the view from behind).
+- **Drops and throws snapped to the floor:** the flat floor's command 2 now carries the hand's height, and vr-sonic lets him go
+  there.
+- **No course in a 2 × 2 m area at 15 cm:** the generator's last-resort loop now steps down from 1.5 m to 0.6 m. The player tries
+  8 more seeds before keeping a fallback, then grows the rectangle.
+- **Files:**
+  - OpenSA2: `host/xr/xr_portal.{h,cpp}`, `host/xr/xr_gpu.cpp`, `host/xr/xr_roomrun.{h,cpp}`, `host/xr/README.md`,
+    `runtime/tweaks/vr-sonic.c`. No upstream file.
+  - Root: `roomrun/src/generator.cpp`, `roomrun/src/skeleton.cpp`, `roomrun/include/roomrun/skeleton.hpp`,
+    `roomrun/examples/batch_1000.txt`.
+- **Checks:** roomrun tests pass; the 1000-room batch gives 1000/1000 at both scales, 100% completable. `test_tweaks` passed;
+  public check 0 failures; `RELEASE_BUILD_OK` (game) and `XR_BUILD_OK`.

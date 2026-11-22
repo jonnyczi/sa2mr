@@ -354,14 +354,14 @@ std::vector<Skeleton> skeletonCandidates(const Room& room, const FreeSpace& fs, 
     return picked;
 }
 
-bool fallbackSkeleton(const Room& room, const FreeSpace& fs, const GenParams& gp, Skeleton& out) {
+bool fallbackSkeleton(const Room& room, const FreeSpace& fs, const GenParams& gp, Skeleton& out, double minLap) {
     const double need = centerlineClearance(gp);
     for (double r : {0.3, 0.2}) {
         Grid G = openedField(fs.clearance, need + 0.01, r);
         auto loops = contourLoops(G, 0.0);
         std::sort(loops.begin(), loops.end(), [](auto& a, auto& b) { return polylineLength(a, true) > polylineLength(b, true); });
         for (auto& l : loops) {
-            if (polylineLength(l, true) < 1.5) continue;
+            if (polylineLength(l, true) < minLap) continue;
             Skeleton sk = makePerimeter(l, room);
             if (!finalizeSkeleton(sk, l, fs, gp, nullptr, true)) continue;
             bool overlaps = false;
@@ -374,7 +374,7 @@ bool fallbackSkeleton(const Room& room, const FreeSpace& fs, const GenParams& gp
     // minimal circle in the largest free disk (rails handle radii down to ~8 units)
     if (!fs.maxima.empty()) {
         double r = std::min(0.8, fs.maxima[0].r - need - 0.01);
-        if (r >= 10 * gp.metersPerUnit() && 2 * kPi * r >= 1.5) {
+        if (r >= 10 * gp.metersPerUnit() && 2 * kPi * r >= minLap) {
             Skeleton sk;
             sk.kind = "circle";
             if (finalizeSkeleton(sk, sampleCircle(fs.maxima[0].p, r, 0.01), fs, gp, nullptr, false)) {

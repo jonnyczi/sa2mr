@@ -31,7 +31,9 @@ double centerlineClearance(const GenParams& gp);
 
 std::vector<Skeleton> skeletonCandidates(const Room& room, const FreeSpace& fs, const GenParams& gp, Rng& rng);
 // Simplest safe loop (no self-overlap): longest perimeter contour, else a circle in the biggest free disk.
-bool fallbackSkeleton(const Room& room, const FreeSpace& fs, const GenParams& gp, Skeleton& out);
+// The last resort when no candidate makes a good course: a plain loop (the free floor's contour, else a circle) of at
+// least minLap metres.
+bool fallbackSkeleton(const Room& room, const FreeSpace& fs, const GenParams& gp, Skeleton& out, double minLap = 1.5);
 
 // Coils (coil.cpp): chains of circular lobes in free disks (the user's ring among them), each wound up to two extra
 // times and joined by tangent lines (crossing where neighbours turn opposite ways), climbing on some lobes and

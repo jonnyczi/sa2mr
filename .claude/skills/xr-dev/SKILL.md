@@ -160,6 +160,12 @@ Read `external/OpenSA2/host/xr/README.md` first. It holds the measured camera fi
     this run's `XDG_CONFIG_HOME` and the XR release path.
   - **Pause-menu tests need two Downs to reach VR / 2D VIEW** (Continue, Restart, then the item); one Down lands on
     Restart.
+  - **Frame portal test (2026-11-22):**
+    - Leave on *any* return to the front side. Strict topology kept a head "inside" after it stepped out over a
+      small window's edge, and then showed the back view instead of the room.
+    - Command 2 (the flat floor) must carry the hand's height, or drops and throws start from the floor.
+    - The course: `rr_generate` tries more seeds, then grows the rectangle. Reproduce generator failures with
+      `roomrun-gen --area W,D,UX,UY --sonic-cm 14.8 --player-r 0.3`.
   - **Room Run objects are the game's size** (SET scale is behaviour; KASOKU's collision is a fixed 10 × 4.44 units). On
     the toy course they overhang, and whether to shrink them is the user's call.
 
