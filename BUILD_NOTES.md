@@ -697,3 +697,21 @@ on an A720.
   `release_build_arm64.py --only game,players,launch,assemble,package` from the committed tree (782333f) plus this round:
   `RELEASE_BUILD_ARM64_OK`, hot order 1328 of 24040 objects first, tarball sha256 `8e657c1a…` (not deployed); under QEMU
   `SA2_SELFTEST_OK` (menu at tick 3572); `QEMU_CPU=cortex-a53` (Armv8.0) is refused by name, cortex-a76 starts.
+
+## Performance round 6: dynamic resolution; the Frame's foveation layer (2026-11-22, `frame-x4a`)
+
+See `host/xr/README.md`, "Dynamic resolution and the Frame's foveation".
+- **The Frame (8e657c1a, eyes 2160²):** Wild Canyon fine; City Escape dips (51.3 fps at frames to 7201) with the game at
+  8.5-9.3 ms a frame and waiting 17-19 ms on the player, and SteamVR's frame period swinging 120/60/40 Hz there: the GPU.
+- **x86 (Radeon 890M, the City Escape stream offline, `SA2_XR_GPU_SYNC=1`):** the GPU's drain after Present 3.1-4.2 ms at
+  2160², 2.6-3.4 at 1728², 2.3-3.1 at 1512², 1.9-2.5 at 1280×720; the player's draw recording 1.7-3.1 ms either way.
+  Too fast to reproduce the Frame's GPU limit; the scaling is what Adreno will see more of.
+- **Dynamic resolution** (on by default; `SA2_XR_RES_DYNAMIC`, `_MIN` 0.7, `_GPU_MS` 11, `_FIXED`): Vulkan timestamps
+  around each game frame's GPU work, the eyes drawn into a part of their targets and shown through `imageRect`.
+  Offline: scale 1 pixel-identical to before; 0.75 matches the full render scaled (RMSE 1.2%).
+- **Foveation:** SteamVR's `libVkLayer_VALVE_fdm_injection.so` (implicit OpenXR layer, eye-tracked through
+  `XR_META_foveation_eye_tracked`) injects density maps keyed on the swapchain size; our double-wide SDL targets most likely
+  never get them. Options and costs in the README; the player now logs the runtime's extensions and the GPU's
+  density-map extensions.
+- **Files:** `host/xr/xr_gpu.cpp`, `host/xr/xr_gloves.{h,cpp}` (`set_view`), `host/xr/xr_vk.cpp` (extension logs),
+  `host/xr/README.md`. No upstream file.
