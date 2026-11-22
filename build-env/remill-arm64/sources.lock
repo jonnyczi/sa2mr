@@ -1,0 +1,42 @@
+# Pinned sources for the aarch64 remill 5.0.7 / LLVM 14.0.3 build (build.sh). Shell-sourceable.
+# Each entry: <name> <file> <sha256> <url>. Versions match what the pinned x86_64 package
+# (remill_ubuntu-20.04_packages.zip, sha256 2a63aba1...) was built from: remill c0f90b9e,
+# cxx-common v0.2.7 (vcpkg 2022.04.12): llvm-14 14.0.3 port-version 4, xed v2022.04.17 + mbuild
+# 09b6654b (sha512s match the cxx-common port), glog 0.5.0, gflags 2.2.2; sleigh 5ee2f2c1 with
+# Ghidra_10.1.4_build (remill's FetchContent pins). All open source; nothing here is SEGA's.
+SOURCES='
+remill     remill-c0f90b9e.tar.gz             1fd14d0211d2c4c8dddb11754cf81926628590d59fcfdb54eadc22c6746de073 https://github.com/lifting-bits/remill/archive/c0f90b9e4a251615288ed4b65ead81cea617da8c.tar.gz
+llvm       llvm-project-14.0.3.src.tar.xz     44d3e7a784d5cf805e72853bb03f218bd1058d448c03ca883dabbebc99204e0c https://github.com/llvm/llvm-project/releases/download/llvmorg-14.0.3/llvm-project-14.0.3.src.tar.xz
+cxxcommon  cxx-common-0.2.7.tar.gz            58e092faf1c8b9fe385188f5ad6b496d72fdcccc97875d63f7eaf0bf0f137e91 https://github.com/lifting-bits/cxx-common/archive/refs/tags/v0.2.7.tar.gz
+xed        xed-2022.04.17.tar.gz              c5f5731263e364852e3f5d50bd3950cfdbd2417f9ff5f1b30238cae0cb295bab https://github.com/intelxed/xed/archive/refs/tags/v2022.04.17.tar.gz
+mbuild     mbuild-09b6654b.tar.gz             5af6b3f0394df1332dd2f09d842719bd2ece1037c09cd042f18e417dddf1e54e https://github.com/intelxed/mbuild/archive/09b6654be0c52bf1df44e88c88b411a67b624cbd.tar.gz
+glog       glog-0.5.0.tar.gz                  eede71f28371bf39aa69b45de23b329d37214016e2055269b3b5e7cfd40b59f5 https://github.com/google/glog/archive/refs/tags/v0.5.0.tar.gz
+gflags     gflags-2.2.2.tar.gz                34af2f15cf7367513b352bdcd2493ab14ce43692d2dcd9dfc499492966c64dcf https://github.com/gflags/gflags/archive/refs/tags/v2.2.2.tar.gz
+sleigh     sleigh-5ee2f2c1.tar.gz             a4c0e987a696e4e356ee325cecdd08b218467f803f958e3eaac54e98c252dc30 https://github.com/lifting-bits/sleigh/archive/5ee2f2c16250a6529108e6a6fff89e0f147502d2.tar.gz
+ghidra     ghidra-Ghidra_10.1.4_build.tar.gz  d48e59e7c29be782b81c8bf76f5bdb41f59a2406dbef5f7115e97a012763d239 https://github.com/NationalSecurityAgency/ghidra/archive/refs/tags/Ghidra_10.1.4_build.tar.gz
+'
+
+# The semantics bitcode is NOT rebuilt: remill compiles it with the build host's default
+# triple, so an aarch64-hosted build would give aarch64 bitcode (long double = fp128, other
+# ABI) and different lifted IR. The x86_64 package's .bc (built on x86_64 by vcpkg clang
+# 14.0.3) is guest-architecture bitcode that any LLVM 14 host can load, so it is taken from
+# upstream's release zip, checked file by file.
+REMILL_ZIP_NAME=remill_ubuntu-20.04_packages.zip
+REMILL_ZIP_SHA256=2a63aba1dbbc625f4a43894ffccd5e08b4fc14c4e8070a7fe9c9f39d5af7b2ab
+REMILL_ZIP_URL=https://github.com/lifting-bits/remill/releases/download/v5.0.7/remill_ubuntu-20.04_packages.zip
+REMILL_ZIP_TGZ=ubuntu-20.04_llvm14_tgz_package/remill-5.0.7.c0f90b9-x86_64.tar.gz
+SEMANTICS='
+e7ac1eae0868582cc901c784c4839d080976729b3651b25787409b9396693db3 aarch32.bc
+b8fd1832ab4256b13e293038d247c8cf8f543d414754659dd26ba180e65a62b1 aarch64.bc
+67dcc7f9fe9573f4d0330bd3a9f26578f31e58fa06ee9f2b85d03e0c535ee11d amd64_avx512.bc
+d0227669c57ed06085709170aa384779f4c9db8da5d82ea392995e9727a2ace7 amd64_avx.bc
+6eea052d039a7b77cb84e86ff13610a86fdb3f4aab2d73b665fdffd57ba5bc1c amd64.bc
+6eea052d039a7b77cb84e86ff13610a86fdb3f4aab2d73b665fdffd57ba5bc1c amd64_sleigh.bc
+56f02e71bb987278e54804526cd04e8733287e6e4dd2b9202e7692c38a45dd75 sparc32.bc
+f8d11266ebe81c36124c290e906d73b39f7cc2a596a8f22bba1dab1ba10c0c12 sparc64.bc
+e7ac1eae0868582cc901c784c4839d080976729b3651b25787409b9396693db3 thumb2.bc
+3323323291391f1c8a59ae1dfa23f003643031d70d0ccc05b3efae514f23a74c x86_avx512.bc
+079961a9f2c4ae3677c0c927e85e024b4fb6936164708d43c72235f9e96885bd x86_avx.bc
+3f359d477b4613ac393fee88f50dcb0ebf7ea3e5572e049699e1cd666d77f926 x86.bc
+3323323291391f1c8a59ae1dfa23f003643031d70d0ccc05b3efae514f23a74c x86_sleigh.bc
+'

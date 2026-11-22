@@ -1,0 +1,7 @@
+#!/bin/sh
+# Satisfies remill's configure-time bitcode probe (see ClangConfig.cmake): writes an empty -o file.
+while [ $# -gt 0 ]; do
+  if [ "$1" = "-o" ]; then : > "$2"; exit 0; fi
+  shift
+done
+exit 0

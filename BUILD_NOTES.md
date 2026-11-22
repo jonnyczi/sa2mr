@@ -957,3 +957,39 @@ Plan: players download `Install-SA2MR.desktop` from our GitHub Releases. The ins
   - So `direct` needs either a remill built with its install prefix at the final path, a patched lift tool, or the semantics at one of those paths. With the semantics bind-mounted at `/usr/local/share/remill`, 405 sampled modules (400 map modules and 5 arm traces) gave byte-identical `.ll` in both modes.
   - The Frame supports `unshare -Urm`, so `unshare` mode works there as it is.
 - **`SA2_STRIP`** (also `SA2_OBJCOPY`, `SA2_READELF`, `SA2_OBJDUMP`, and the prefix `SA2_CROSS`, default `aarch64-linux-gnu-`): `private/sa2mr/arm64/release_build_arm64.py` `tool()`.
+
+### remill 5.0.7 for aarch64: byte-identical lifted IR (Phase 1 step 5, 2026-11-22)
+
+**What the x86 package was built from** (strings in `remill-lift-14`, the `.bc` producer): cxx-common **v0.2.7** (vcpkg 2022.04.12), so LLVM **14.0.3** (llvm-14 port-version 4: assertions on, ABI-breaking checks off, RTTI+EH, targets AArch64/ARM/NVPTX/Sparc/WebAssembly/X86), XED v2022.04.17, glog 0.5.0, gflags 2.2.2, sleigh 5ee2f2c1 on Ghidra 10.1.4; remill c0f90b9e built in CI with `CMAKE_INSTALL_PREFIX=/usr/local`. cxx-common ships no arm64-linux prebuilt for LLVM 14, so everything is built from source.
+
+**The semantics bitcode is not rebuilt.** remill compiles `share/remill/14/semantics/*.bc` with the build host's default triple (`cmake/BCCompiler.cmake` passes no `-target` on Linux), so an aarch64-hosted build would produce aarch64 bitcode (`long double` = fp128, a different ABI) and different IR. The x86 package's `.bc` files are guest-semantics bitcode that LLVM 14 loads on any host. The build takes them from upstream's release zip (sha256 `2a63aba1…`) and checks each file against its sha256. They are Apache-2.0 remill output, not SEGA data.
+
+**Build** (`build-env/remill-arm64/`, new files):
+- `sources.lock`: pinned URLs and sha256s. These are remill, llvm-project 14.0.3, cxx-common v0.2.7 (its llvm/ patches and `XEDConfig.cmake`), xed, mbuild, glog, gflags, sleigh and the Ghidra tarball, plus the 13 semantics `.bc` hashes.
+- `build.sh --cross|--native --work DIR [--zip ZIP] [--jobs N]`: fetch and check the sources, then build gflags, glog, XED (mbuild), LLVM (libraries only), and remill's `remill-lift-14` target only. The configure-time clang probe is met by `stub-clang/`. The script then assembles `out/remill-aarch64/{bin/remill-lift-14, share/remill/14/semantics, share/doc/remill-aarch64 (licences, BUILDINFO)}`. Stages resume through `.ok` stamps.
+- `run-cross.sh WORKDIR`: runs `--cross` in `opensa2-cross` (clang/lld 19) against the sniper arm64 sysroot (glibc 2.31, libstdc++ 10). It needs `-include cstdint` for LLVM's host tablegen only, because the container's gcc 14 libstdc++ needs it.
+- `--native` is the CI path (ubuntu-24.04-arm / sniper arm64 SDK, `$CC`/`$CXX`). **It is not yet exercised.**
+- A clean cross build takes **8.0 min at 20 jobs** (LLVM 7.1 min) and needs about 2.2 GB of work space. Two clean builds gave a bit-identical binary (sha256 `b1d94593…`).
+- **Result:** `remill-lift-14` is 37 MB stripped, a PIE that needs only `libc/libm/libdl/librt/libpthread` (libstdc++ and libgcc are static). Its highest symbol version is **GLIBC_2.29**, so it runs on the Frame's 2.39. The prefix is 53 MB with all semantics.
+- Like the x86 package, it looks for semantics in `/usr/local/share/remill/14/semantics`, so `SA2_REMILL_MODE=unshare` works with `SA2_REMILL_PREFIX` pointing at the prefix. `remill-lift-14 --version` prints "unknown" because the tarball source has no git metadata.
+
+**Determinism** (`build-env/remill-arm64/check/compare.sh PREFIX OUTDIR [N]`): it lifts a stride sample of the function map with lift_all.py `--to-next-entry` arguments, plus 5 jump-table arms with lift_arms.py `--entry_address` arguments. The x86 package runs on the host in `unshare` mode; the aarch64 build runs under QEMU (`opensa2-arm64-test`, prefix mounted at `/usr/local`, 8 cores). The raw `.ll` files are then compared byte for byte.
+- **205 modules (200 map + 5 arms): 205/205 identical.**
+- **2005 modules (2000 map + 5 arms, 728 KB of code): 2005/2005 identical.** QEMU took 327 s against 59 s on x86, at 8 and 4 jobs.
+- The fresh x86 lifts also equal the pipeline's existing `lift/next` and `arms/lift/next` files (205/205).
+- `unshare -Urm` fails under qemu-user (EINVAL), so unshare mode was only tested on x86 and in the Frame probe.
+
+**Still open:**
+- The full-image LIFT_IR_OK with the aarch64 remill.
+- The `--native` CI run.
+- CI's synthetic-corpus gate.
+
+### Steamless on the Frame (2026-11-22)
+- Steamless 3.1.0.5, downloaded on the Frame from atom0s' GitHub release (zip sha256 `e3e2d22e…`, same as ours), runs under **Proton 11.0 (ARM64)**.
+  - The command: `SteamLinuxRuntime_4-arm64/run -- "<Proton>/proton" runinprefix Steamless.CLI.exe Z:<exe>`, with `STEAM_COMPAT_DATA_PATH` set to a prefix of its own and `STEAM_COMPAT_CLIENT_INSTALL_PATH` set to `~/.local/share/Steam`.
+  - wine-mono 11.2 runs the 32-bit x86 .NET code through Proton's FEX wow64.
+- **It unpacked `sonic2app.exe` in 8.7 s. The output is the pinned `c97b116f…`, so `normalize_unpacked.py` has nothing to do.**
+- Gotchas:
+  - Under this Mono, `Steamless.API.dll` and `SharpDisasm.dll` must sit next to `Steamless.CLI.exe` (copied from `Plugins/`). Otherwise there's a TypeLoadException.
+  - With `proton run` instead of `runinprefix`, it hung on a pipe: `run` goes through `steam.exe`. Use `runinprefix` with stdin from `/dev/null`.
+- Our installer's dry run on the Frame's Steam copy (`sa2-install --source steam`): all 4,191 files ok, `SA2_INSTALL_OK`, 6.6 s.
