@@ -1,0 +1,304 @@
+# Steam Frame release pipeline: guard -> toolchain (only when its inputs changed) -> app -> release.
+#
+# Hard rule (the user's): nothing proprietary is ever uploaded. No SEGA code or data, nothing
+# translated from it, no game screenshots: not in an artifact, a cache or a Release asset. CI never
+# has the game; the game is translated on the Frame from the user's own Steam copy
+# (platforms/steam-frame/sa2mr_build.py). tools/release/sa2mr_scan.py runs before every upload.
+#
+#   guard      every push and PR: OpenSA2's public_check, root_check, unit tests, workflow lint
+#   toolchain  remill 5.0.7/LLVM 14 (cross-built for aarch64), zig, wheels: built only when no
+#              prerelease toolchain-<id> exists (<id> = tools/release/toolchain_id.sh, a hash of the
+#              inputs), verified natively on an arm64 runner, then published as that prerelease
+#   app        the installer's tarball (tools/release/ci_app.sh: players, installer, launcher,
+#              kit, frame scripts, kit/toolchain.json naming the toolchain asset), no game
+#   release    on v* tags (a '-' in the tag makes a prerelease): SHA256SUMS and the assets
+name: frame
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*', 'toolchain-*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      build_toolchain:
+        description: Rebuild and re-upload the toolchain even if its toolchain-<id> release exists
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frame-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: OpenSA2 public_check (the fork's own source rules)
+        working-directory: external/OpenSA2
+        run: |
+          mkdir -p private/generated
+          python3 tools/public_check.py
+      - name: root_check (no media/, no binaries, external/ only the submodule)
+        run: python3 tools/release/root_check.py
+      - name: unit tests (Frame scripts; scanner and root_check fixtures)
+        run: |
+          python3 -m unittest discover -s platforms/steam-frame/tests -v
+          python3 -m unittest discover -s tools/release/tests -v
+      - name: workflow lint (no Steam or game downloads; actions pinned; no secrets)
+        run: python3 tools/release/workflow_lint.py
+      - name: actionlint
+        run: docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint:1.7.7 -color
+      - name: shellcheck
+        run: |
+          shellcheck -x -S warning platforms/steam-frame/install.sh platforms/steam-frame/sa2mr-vr.sh \
+            tools/release/ci_app.sh tools/release/toolchain_id.sh build-env/arm64/make_sysroot.sh \
+            build-env/frame-toolchain/ref_ll.sh build-env/frame-kit/make_kit.sh build-env/cross/run.sh
+
+  toolchain:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 340
+    outputs:
+      id: ${{ steps.id.outputs.id }}
+      need: ${{ steps.id.outputs.need }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      FORCE: ${{ inputs.build_toolchain }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: toolchain id, and whether its release exists
+        id: id
+        run: |
+          id=$(tools/release/toolchain_id.sh)
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          if gh release view "toolchain-$id" --repo "$GITHUB_REPOSITORY" --json tagName >/dev/null 2>&1 && [ "$FORCE" != true ]; then
+            echo "need=false" >> "$GITHUB_OUTPUT"
+            echo "toolchain-$id is published: nothing to build"
+          else
+            echo "need=true" >> "$GITHUB_OUTPUT"
+            echo "building toolchain-$id"; tools/release/toolchain_id.sh --list
+          fi
+      - name: free disk space
+        if: steps.id.outputs.need == 'true'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          docker image prune -af >/dev/null
+          df -h / "$RUNNER_TEMP"
+      - name: remill cache (open-source build output and sha-pinned public downloads only)
+        if: steps.id.outputs.need == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/tc-remill/dl
+            ${{ runner.temp }}/tc-remill/out
+          key: remill-aarch64-${{ hashFiles('build-env/remill-arm64/**', 'build-env/cross/Dockerfile', 'build-env/Dockerfile', 'build-env/arm64/make_sysroot.sh') }}
+      - name: build images and the sniper arm64 sysroot
+        if: steps.id.outputs.need == 'true'
+        run: |
+          docker build -q --build-arg UID="$(id -u)" --build-arg GID="$(id -g)" -t opensa2-build build-env
+          docker build -q -t opensa2-cross build-env/cross
+          build-env/arm64/make_sysroot.sh "$RUNNER_TEMP/sysroot"
+      - name: build the toolchain (remill cross build when not cached, iced-x86 wheel, zig, pefile)
+        if: steps.id.outputs.need == 'true'
+        env:
+          SA2MR_SYSROOT: ${{ runner.temp }}/sysroot
+        run: |
+          build-env/frame-toolchain/build.sh "$RUNNER_TEMP/tc" --jobs "$(nproc)" \
+            --remill-work "$RUNNER_TEMP/tc-remill" --reuse-remill --no-verify
+          rm -rf "$RUNNER_TEMP/tc/work" "$RUNNER_TEMP/tc-remill/build" "$RUNNER_TEMP/tc-remill/src" "$RUNNER_TEMP/tc-remill/deps"
+      - name: reference IR from upstream's x86_64 remill (synthetic bytes, no game data)
+        if: steps.id.outputs.need == 'true'
+        run: build-env/frame-toolchain/ref_ll.sh "$RUNNER_TEMP/tc-remill/dl/remill_ubuntu-20.04_packages.zip" "$RUNNER_TEMP/tc/ref-x86.ll"
+      - name: scan before upload (the toolchain, and the remill prefix the cache keeps)
+        if: steps.id.outputs.need == 'true'
+        run: |
+          python3 tools/release/sa2mr_scan.py --profile toolchain "$RUNNER_TEMP/tc/sa2mr-toolchain-aarch64.tar.zst"
+          python3 tools/release/sa2mr_scan.py --profile toolchain "$RUNNER_TEMP/tc-remill/out"
+      - name: upload the toolchain artifact
+        if: steps.id.outputs.need == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: toolchain
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/tc/sa2mr-toolchain-aarch64.tar.zst
+            ${{ runner.temp }}/tc/sa2mr-toolchain-aarch64.tar.zst.sha256
+            ${{ runner.temp }}/tc/sa2mr-toolchain-aarch64.manifest
+            ${{ runner.temp }}/tc/toolchain.lock
+            ${{ runner.temp }}/tc/ref-x86.ll
+
+  toolchain-verify:
+    needs: toolchain
+    if: needs.toolchain.outputs.need == 'true'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: toolchain
+          path: tc
+      - name: native aarch64 check (wheels in Python 3.12, zig cc, remill IR = the x86_64 package's)
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          docker build -q --build-arg UID="$(id -u)" --build-arg GID="$(id -g)" -t opensa2-arm64-test build-env/arm64/test
+          QEMU_CPUS="0-$(( $(nproc) - 1 ))" REF_LL="$PWD/tc/ref-x86.ll" \
+            build-env/frame-toolchain/verify.sh tc/sa2mr-toolchain-aarch64.tar.zst | tee verify.log
+          grep -q 'identical to the x86_64 package' verify.log
+          grep -q '^TOOLCHAIN_VERIFY_OK' verify.log
+
+  toolchain-publish:
+    needs: [toolchain, toolchain-verify]
+    if: needs.toolchain.outputs.need == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ID: ${{ needs.toolchain.outputs.id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: toolchain
+          path: tc
+      - name: scan again
+        run: python3 tools/release/sa2mr_scan.py --profile toolchain tc/sa2mr-toolchain-aarch64.tar.zst
+      - name: publish toolchain-${{ needs.toolchain.outputs.id }} (prerelease)
+        run: |
+          ( cd tc && sha256sum -c sa2mr-toolchain-aarch64.tar.zst.sha256 )
+          {
+            echo "The Steam Frame translation toolchain (id $ID): remill 5.0.7 and LLVM 14.0.3 built for aarch64,"
+            echo "zig 0.15.2, and the iced-x86 and pefile wheels, with their licences (licenses/, SOURCES.txt)."
+            echo "All open source, built from the pinned inputs in toolchain.lock. No game code or data."
+            echo
+            echo "The SA2 VR installer's builder downloads it; you don't need to."
+            echo
+            echo "Built from $GITHUB_SHA. sha256: $(cut -d' ' -f1 tc/sa2mr-toolchain-aarch64.tar.zst.sha256)"
+          } > notes.md
+          files=(tc/sa2mr-toolchain-aarch64.tar.zst tc/sa2mr-toolchain-aarch64.tar.zst.sha256
+                 tc/sa2mr-toolchain-aarch64.manifest tc/toolchain.lock)
+          if gh release view "toolchain-$ID" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "toolchain-$ID" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "toolchain-$ID" "${files[@]}" --repo "$GITHUB_REPOSITORY" --prerelease \
+              --target "$GITHUB_SHA" --title "Frame toolchain $ID" --notes-file notes.md
+          fi
+
+  app:
+    needs: [guard, toolchain, toolchain-publish]
+    if: >-
+      ${{ !cancelled() && needs.guard.result == 'success'
+          && (needs.toolchain.result == 'success' || needs.toolchain.result == 'skipped')
+          && (needs.toolchain-publish.result == 'success' || needs.toolchain-publish.result == 'skipped') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+      - name: toolchain.json (the toolchain asset the builder fetches)
+        id: tc
+        run: |
+          id=$(tools/release/toolchain_id.sh)
+          tag="toolchain-$id"
+          if gh release download "$tag" --repo "$GITHUB_REPOSITORY" -p sa2mr-toolchain-aarch64.tar.zst.sha256 -D tcref; then
+            sha=$(cut -d' ' -f1 tcref/sa2mr-toolchain-aarch64.tar.zst.sha256)
+            url="https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/sa2mr-toolchain-aarch64.tar.zst"
+            printf '{"url": "%s", "sha256": "%s", "id": "%s"}\n' "$url" "$sha" "$id" > toolchain.json
+            cat toolchain.json
+            echo "json=$PWD/toolchain.json" >> "$GITHUB_OUTPUT"
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "::error::no release $tag: the toolchain for this commit is not published"
+            exit 1
+          else
+            echo "::warning::no release $tag yet: the app's kit names no toolchain (fine for a test build)"
+          fi
+      - name: build the app (no game; tools/release/ci_app.sh scans it)
+        env:
+          SA2MR_SYSROOT: ${{ runner.temp }}/sysroot
+          TCJ: ${{ steps.tc.outputs.json }}
+        run: tools/release/ci_app.sh "$RUNNER_TEMP/app" ${TCJ:+--toolchain-json "$TCJ"} --jobs "$(nproc)"
+      - name: stage and scan before upload
+        run: |
+          mkdir -p dist
+          cp "$RUNNER_TEMP"/app/sa2mr-app-linux-aarch64.tar.gz "$RUNNER_TEMP"/app/sa2mr-app-linux-aarch64.tar.gz.sha256 \
+             "$RUNNER_TEMP"/app/APP_SOURCE.txt dist/
+          [ ! -f toolchain.json ] || cp toolchain.json dist/
+          python3 tools/release/sa2mr_scan.py --profile app dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app
+          retention-days: 14
+          compression-level: 0
+          if-no-files-found: error
+          path: dist/
+
+  release:
+    needs: [guard, app]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: app
+          path: art
+      - name: assets
+        run: |
+          ( cd art && sha256sum -c sa2mr-app-linux-aarch64.tar.gz.sha256 )
+          python3 -c 'import json,sys; d=json.load(open("art/toolchain.json")); assert d["url"] and len(d["sha256"]) == 64, d'
+          mkdir -p dist
+          cp art/sa2mr-app-linux-aarch64.tar.gz art/toolchain.json dist/
+          cp platforms/steam-frame/Install-SA2MR.desktop platforms/steam-frame/Uninstall-SA2MR.desktop dist/
+          python3 tools/release/sa2mr_scan.py --profile app dist
+          ( cd dist && sha256sum -- * > ../SHA256SUMS ) && mv SHA256SUMS dist/
+          cat dist/SHA256SUMS
+      - name: create the release
+        run: |
+          pre=()
+          [[ "$TAG" == *-* ]] && pre=(--prerelease)
+          tc_url=$(python3 -c 'import json; print(json.load(open("dist/toolchain.json"))["url"])')
+          {
+            echo "## Sonic Adventure 2 VR for the Steam Frame, $TAG"
+            echo
+            echo "**Install:** in desktop mode on the Frame, download **Install-SA2MR.desktop** below and open it."
+            echo "It needs Sonic Adventure 2 installed through Steam on the Frame, about 25 GB free and about an"
+            echo "hour on the charger the first time. Run it again to update; Uninstall-SA2MR.desktop removes it."
+            echo
+            echo "No game code or data is in these files: the game is translated on your Frame from your own"
+            echo "Steam copy. The app holds our programs and the public OpenSA2 source (APP_SOURCE.txt inside names"
+            echo "the commits); the builder downloads the open-source toolchain"
+            echo "($tc_url)."
+          } > notes.md
+          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --verify-tag "${pre[@]}" \
+            --title "SA2 VR $TAG" --notes-file notes.md

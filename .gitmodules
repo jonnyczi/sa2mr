@@ -1,0 +1,5 @@
+[submodule "external/OpenSA2"]
+	path = external/OpenSA2
+	url = https://github.com/jonnyczi/OpenSA2.git
+	branch = sa2mr
+	ignore = dirty

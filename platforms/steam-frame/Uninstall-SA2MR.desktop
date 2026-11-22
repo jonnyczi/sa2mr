@@ -1,0 +1,9 @@
+#!/usr/bin/env xdg-open
+[Desktop Entry]
+Type=Application
+Name=Uninstall Sonic Adventure 2 VR
+Comment=Remove SA2 VR, its Steam entry and its build data from the Steam Frame (your saves are kept)
+Exec=sh -c "if command -v konsole >/dev/null; then exec konsole --hold -e bash -c 'curl -fsSL https://raw.githubusercontent.com/jonnyczi/sa2mr/main/platforms/steam-frame/install.sh -o /tmp/sa2mr-install.sh || cp ~/Applications/sa2mr/frame/install.sh /tmp/sa2mr-install.sh; SA2MR_FROM_DESKTOP=1 bash /tmp/sa2mr-install.sh --uninstall'; elif command -v x-terminal-emulator >/dev/null; then exec x-terminal-emulator -e bash -c 'curl -fsSL https://raw.githubusercontent.com/jonnyczi/sa2mr/main/platforms/steam-frame/install.sh -o /tmp/sa2mr-install.sh || cp ~/Applications/sa2mr/frame/install.sh /tmp/sa2mr-install.sh; SA2MR_FROM_DESKTOP=1 bash /tmp/sa2mr-install.sh --uninstall; read -r _'; else exec bash -c 'curl -fsSL https://raw.githubusercontent.com/jonnyczi/sa2mr/main/platforms/steam-frame/install.sh -o /tmp/sa2mr-install.sh || cp ~/Applications/sa2mr/frame/install.sh /tmp/sa2mr-install.sh; SA2MR_FROM_DESKTOP=1 bash /tmp/sa2mr-install.sh --uninstall' >/dev/null 2>&1; fi"
+Icon=edit-delete
+Terminal=false
+StartupNotify=false

@@ -3,7 +3,9 @@
 # Frame (SteamOS, aarch64, glibc 2.39, Python 3.12) needs besides its own git/clang/lld/curl/zstd
 # to run OpenSA2's translation chain natively. All open source, built from pinned inputs; no SEGA
 # code or data goes in.
-#   build-env/frame-toolchain/build.sh OUTDIR [--jobs N] [--remill-work DIR] [--no-verify]
+#   build-env/frame-toolchain/build.sh OUTDIR [--jobs N] [--remill-work DIR] [--reuse-remill] [--no-verify]
+# --reuse-remill takes the remill prefix already in the remill work dir (DIR/out/remill-aarch64, as
+# CI's cache restores it) instead of running run-cross.sh. SA2MR_SYSROOT names the sysroot.
 # OUTDIR gets:
 #   sa2mr-toolchain-aarch64.tar.zst      the toolchain (top directory sa2mr-toolchain-aarch64/)
 #   sa2mr-toolchain-aarch64.tar.zst.sha256
@@ -25,12 +27,13 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 . "$ROOT/build-env/remill-arm64/sources.lock"
 
 OUT="${1:?usage: build.sh OUTDIR [--jobs N] [--remill-work DIR] [--no-verify]}"; shift
-JOBS=16 RWORK="" VERIFY=1
+JOBS=16 RWORK="" VERIFY=1 REUSE=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --jobs) JOBS="$2"; shift ;;
     --remill-work) RWORK="$2"; shift ;;
     --no-verify) VERIFY=0 ;;
+    --reuse-remill) REUSE=1 ;;
     *) echo "unknown argument $1" >&2; exit 2 ;;
   esac
   shift
@@ -41,7 +44,7 @@ W="$OUT/work" DL="$OUT/work/dl"
 RWORK="${RWORK:-$W/remill}"; mkdir -p "$RWORK"; RWORK="$(cd "$RWORK" && pwd)"
 NAME=sa2mr-toolchain-aarch64
 STAGE="$W/stage/$NAME"
-SYSROOT="$ROOT/build-env/arm64/sysroot"
+SYSROOT="${SA2MR_SYSROOT:-$ROOT/build-env/arm64/sysroot}"
 [ -d "$SYSROOT/usr/lib/aarch64-linux-gnu" ] || { echo "no sysroot at $SYSROOT (build-env/arm64/build_release.sh makes it)" >&2; exit 1; }
 T0=$(date +%s)
 step() { printf '\n== [%5ss] %s\n' "$(( $(date +%s) - T0 ))" "$*"; }
@@ -62,11 +65,15 @@ if [ ! -f "$ZIP" ]; then curl -fL --retry 3 -o "$ZIP.part" "$REMILL_ZIP_URL" && 
 echo "$REMILL_ZIP_SHA256  $ZIP" | sha256sum -c --quiet - || { echo "sha256 mismatch: $ZIP" >&2; exit 1; }
 
 # ---- remill (cross build, resumes through its .ok stamps) ---------------------------------
-step "remill: build-env/remill-arm64/run-cross.sh $RWORK"
-"$ROOT/build-env/remill-arm64/run-cross.sh" "$RWORK" --jobs "$JOBS" > "$W/remill.log" 2>&1 \
-  || { tail -30 "$W/remill.log"; exit 1; }
-grep '^== ' "$W/remill.log" | tail -2
 PREFIX="$RWORK/out/remill-aarch64"
+if [ "$REUSE" = 1 ] && [ -x "$PREFIX/bin/remill-lift-14" ]; then
+  step "remill: reusing $PREFIX (--reuse-remill)"
+else
+  step "remill: build-env/remill-arm64/run-cross.sh $RWORK"
+  "$ROOT/build-env/remill-arm64/run-cross.sh" "$RWORK" --jobs "$JOBS" > "$W/remill.log" 2>&1 \
+    || { tail -30 "$W/remill.log"; exit 1; }
+  grep '^== ' "$W/remill.log" | tail -2
+fi
 [ -x "$PREFIX/bin/remill-lift-14" ] || { echo "no remill-lift-14 in $PREFIX" >&2; exit 1; }
 
 # ---- iced-x86 wheel -----------------------------------------------------------------------
@@ -164,7 +171,7 @@ EOF
   echo "remill-lift-14 sha256: $(sha256sum "$STAGE/remill/bin/remill-lift-14" | cut -d' ' -f1)"
   echo "$(basename "$WHEEL") sha256: $(sha256sum "$WHEEL" | cut -d' ' -f1)"
   echo "build image opensa2-cross: $(docker image inspect -f '{{.Id}}' opensa2-cross)"
-  echo "sniper arm64 sysroot: build-env/arm64/sysroot (build-env/arm64/pins.json)"
+  echo "sniper arm64 sysroot: $("$ROOT/build-env/arm64/make_sysroot.sh" --image)"
 } > "$STAGE/BUILDINFO"
 
 ( cd "$STAGE" && find . -type f ! -name MANIFEST.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sed 's#  \./#  #' ) > "$STAGE/MANIFEST.sha256"

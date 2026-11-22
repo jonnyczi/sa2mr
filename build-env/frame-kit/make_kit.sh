@@ -11,16 +11,22 @@
 # TOOLCHAIN_JSON, when given, goes in as kit/toolchain.json ({"url", "sha256"}: what step 1 of
 # the builder fetches when the toolchain directory is empty).
 #
+# EXCLUDE paths are left out: upstream's docs/screenshots are pictures of the game, which no
+# release asset may hold (the user's rule), and the builder never reads them.
+#
 # Then a deny scan, which refuses the kit (and deletes OUT) on any hit: a PE or ELF image, a
-# .ll/.bc/.o/.a/.so/.obj/.exe/.dll file, a file over 20 MB, anything under private/, a symlink that
-# points out of the kit. Nothing in the kit may come from the game: it is the public source only.
+# .ll/.bc/.o/.a/.so/.obj/.exe/.dll file, an image/audio/video file, a file over 20 MB, anything
+# under private/, a symlink that points out of the kit. Nothing in the kit may come from the game:
+# it is the public source only. SA2MR_OPENSA2 names another OpenSA2 checkout (default
+# external/OpenSA2).
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
-R="$ROOT/external/OpenSA2"
+R="${SA2MR_OPENSA2:-$ROOT/external/OpenSA2}"
 OUT="${1:?usage: make_kit.sh OUT.tar.gz [TOOLCHAIN_JSON]}"
 TCJ="${2:-}"
 OVERLAY=(sa2mr Documentation/sa2mr)
+EXCLUDE=(docs/screenshots)
 MAX_BYTES=$((20 * 1024 * 1024))
 REQUIRED=(sa2mr/frame/translation_inputs.txt Documentation/sa2mr/function-map-trimmed.json
           sa2mr/map/restore_map.py sa2mr/finalize_extras.py sa2mr/arm64/lift_arm64.py
@@ -35,6 +41,7 @@ head=$(git -C "$R" rev-parse HEAD)
 branch=$(git -C "$R" rev-parse --abbrev-ref HEAD)
 echo "kit: external/OpenSA2 $branch $head"
 git -C "$R" archive --format=tar HEAD | tar -x -C "$STAGE/kit"
+for x in "${EXCLUDE[@]}"; do rm -rf "${STAGE:?}/kit/$x"; done
 
 # Uncommitted files under the overlay paths: tracked ones that differ, and untracked ones that
 # are not ignored (an ignored file, like __pycache__, is never taken).
@@ -77,6 +84,8 @@ while IFS= read -r -d '' p; do
   [ -f "$p" ] || continue
   case "${rel,,}" in
     *.ll|*.bc|*.o|*.a|*.so|*.so.*|*.obj|*.exe|*.dll) deny+=("$rel: build output or executable suffix"); continue ;;
+    *.png|*.jpg|*.jpeg|*.gif|*.bmp|*.webp|*.tga|*.dds|*.wav|*.ogg|*.mp3|*.adx|*.mp4|*.webm|*.y4m|*.prs|*.pak|*.afs)
+      deny+=("$rel: an image, audio, video or game-data file"); continue ;;
   esac
   size=$(stat -c %s "$p")
   [ "$size" -le "$MAX_BYTES" ] || { deny+=("$rel: $size bytes (over 20 MB)"); continue; }

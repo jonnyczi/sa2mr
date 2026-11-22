@@ -1,0 +1,9 @@
+#!/usr/bin/env xdg-open
+[Desktop Entry]
+Type=Application
+Name=Install Sonic Adventure 2 VR
+Comment=Install or update SA2 VR on the Steam Frame (builds it from your own Steam copy of Sonic Adventure 2)
+Exec=sh -c "if command -v konsole >/dev/null; then exec konsole --hold -e bash -c 'curl -fsSL https://raw.githubusercontent.com/jonnyczi/sa2mr/main/platforms/steam-frame/install.sh -o /tmp/sa2mr-install.sh && SA2MR_FROM_DESKTOP=1 bash /tmp/sa2mr-install.sh'; elif command -v x-terminal-emulator >/dev/null; then exec x-terminal-emulator -e bash -c 'curl -fsSL https://raw.githubusercontent.com/jonnyczi/sa2mr/main/platforms/steam-frame/install.sh -o /tmp/sa2mr-install.sh && SA2MR_FROM_DESKTOP=1 bash /tmp/sa2mr-install.sh; read -r _'; else exec bash -c 'curl -fsSL https://raw.githubusercontent.com/jonnyczi/sa2mr/main/platforms/steam-frame/install.sh -o /tmp/sa2mr-install.sh && SA2MR_FROM_DESKTOP=1 bash /tmp/sa2mr-install.sh' >/dev/null 2>&1; fi"
+Icon=applications-games
+Terminal=false
+StartupNotify=false

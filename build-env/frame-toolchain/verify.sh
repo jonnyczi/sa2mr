@@ -6,7 +6,8 @@
 #   - remill-lift-14 lifting a synthetic x86 byte string (push ebp; mov ebp,esp; pop ebp; ret),
 #     first in SA2_REMILL_MODE=unshare's bind-mount form, then (qemu-user can't unshare) with the
 #     prefix mounted at /usr/local; when OpenSA2's pinned x86_64 remill is present, the same
-#     lift on the host must give byte-identical IR.
+#     lift on the host must give byte-identical IR; REF_LL=FILE names that IR instead (CI: made by
+#     ref_ll.sh on the x86_64 runner, compared on the aarch64 one).
 #   build-env/frame-toolchain/verify.sh TARBALL
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -48,7 +49,9 @@ docker run --rm -i --platform linux/arm64 --cpuset-cpus "$CPUS" -v "$TC/remill":
 docker run --rm -i --platform linux/arm64 --cpuset-cpus "$CPUS" -v "$TC/remill":/usr/local:ro -v "$V/ll":/ll opensa2-arm64-test \
   bash -c "/usr/local/bin/remill-lift-14 $LIFT --ir_out /ll/a64.ll && grep -c . /ll/a64.ll"
 X86="$ROOT/external/OpenSA2/private/lifters/remill/usr/local"
-if [ -x "$X86/bin/remill-lift-14" ]; then
+if [ -n "${REF_LL:-}" ]; then
+  cmp "$REF_LL" "$V/ll/a64.ll" && echo "remill IR identical to the x86_64 package's ($REF_LL, $(sha256sum < "$V/ll/a64.ll" | cut -c1-16))"
+elif [ -x "$X86/bin/remill-lift-14" ]; then
   docker run --rm -i --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
     -v "$X86":/remill:ro -v "$V/ll":/ll opensa2-build bash -c \
     "unshare -Urm --propagation unchanged sh -c 'mount --bind /remill /usr/local && /usr/local/bin/remill-lift-14 $LIFT --ir_out /ll/x86.ll'"

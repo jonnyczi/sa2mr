@@ -13,7 +13,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 R="$ROOT/external/OpenSA2"
-SDK_IMAGE="registry.gitlab.steamos.cloud/steamrt/sniper/sdk/arm64@sha256:966ad3ef70751b98253f031d22c5b75798ceb9c49612b0a3489fc5f8f58858fc"
+SDK_IMAGE="$("$HERE/make_sysroot.sh" --image)"
 X="$ROOT/build-env/cross/run.sh"
 step() { echo "=== $(date +%H:%M:%S) $*"; }
 
@@ -22,17 +22,7 @@ docker image inspect opensa2-build >/dev/null || docker build -t opensa2-build "
 docker build -q -t opensa2-cross "$ROOT/build-env/cross"
 
 step "sniper arm64 SDK sysroot ($SDK_IMAGE)"
-if [ ! -d "$HERE/sysroot/usr/lib/gcc-14" ]; then
-  rm -rf "$HERE/sysroot"; mkdir -p "$HERE/sysroot"
-  cid=$(docker create --platform linux/arm64 "$SDK_IMAGE" /bin/true)
-  docker export "$cid" | tar -C "$HERE/sysroot" -xf - usr lib bin etc
-  docker rm "$cid" >/dev/null
-  # Absolute symlinks (libfoo.so -> /lib/...) made relative, so they resolve inside the sysroot.
-  (cd "$HERE/sysroot" && find usr lib -type l -lname '/*' | while read -r l; do
-     ln -sfn "$(realpath -m --relative-to="$(dirname "$l")" ".$(readlink "$l")")" "$l"; done)
-  # The arm64 prefix's pkg-config paths (/work/private/s5-tools/install) through the sysroot.
-  ln -sfn /work "$HERE/sysroot/work"
-fi
+"$HERE/make_sysroot.sh" "$HERE/sysroot"
 
 step "sources"
 D="$HERE/s5-tools/dl"; mkdir -p "$D" "$HERE/s5-tools/src"

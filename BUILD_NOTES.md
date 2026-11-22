@@ -1064,3 +1064,73 @@ Plan: players download `Install-SA2MR.desktop` from our GitHub Releases. The ins
   - Steamless under Proton from the script;
   - a full on-device build or `LIFT_IR_OK` with the aarch64 remill;
   - the Steam restart.
+
+### Submodule, CI, scanner and the installer (Phases 2.4, 3 and 5, 2026-11-22)
+
+**Submodule.** `external/OpenSA2` is now a submodule of the root (`.gitmodules`: `https://github.com/jonnyczi/OpenSA2.git`, branch `sa2mr`, `ignore = dirty`), pinned to `82a71b4b` (the pushed `sa2mr` HEAD).
+- The existing checkout was kept as it is (its own `.git`, the ignored `private/`, the `pr/*` branches): only the gitlink (`git update-index --cacheinfo 160000,…`) and `.gitmodules` were added, and `git submodule init` registered the URL.
+- `.gitignore` now ignores `/external/*` except `/external/OpenSA2`, and `__pycache__/`.
+- Staged, not committed. `git submodule status` shows ` 82a71b4b… external/OpenSA2 (heads/sa2mr)`; the fork's local `tools/pins.json` repin and the regenerated receipt don't show in the root's `git status` (`ignore = dirty`).
+
+**Found:** upstream tracks two game screenshots (`docs/screenshots/city-escape-*.png`), so they are in the public fork too. `make_kit.sh` now leaves `docs/screenshots` out of the kit and refuses images and audio, so no release asset holds them. Whether to delete them from the fork's `sa2mr` branch is the user's call.
+
+**Scanner** (`tools/release/sa2mr_scan.py`, new): runs before every artifact, cache and release upload. It reads directories and archives (`.tar*`, `.tar.zst` through the `zstd` command, `.zip`/`.whl`, nested to depth 3). It refuses:
+- PE images (by magic and by suffix), `sa2-game`, and `.ll/.o/.obj/.a`;
+- `.bc` (or bitcode magic) unless its sha256 is among the 13 semantics files pinned in `sources.lock`;
+- an ELF with more than 50 distinct `sub_<hex>` names, in its symbol tables or its raw bytes, and any ELF that isn't AArch64;
+- files whose sha256 is a game file's (3,328 distinct hashes from `install-hashes-v1.json`, plus the two pinned executables);
+- images, audio, video and the game's data formats; anything under `private/` or `.git/`; escaping symlinks; binaries of no allowed type; and files over the size caps.
+
+There are three profiles: `app` (ELFs only under `bin/` and `lib/`), `toolchain` (wheels, plus zig's `.der` and `abilists`) and `kit` (no ELF).
+- **On real outputs:** it passes the toolchain tarball (18,304 files) and the CI-built app (1,683 files).
+- It refuses the local release because of `bin/sa2-game`, and it refuses the same file renamed `bin/innocent` because of its 24,040 lifted symbols.
+- It refuses the old kit because of the two screenshots.
+- **Tests:** `tools/release/tests/test_release_tools.py` has 16 cases with planted fixtures (a PE, crafted ELF64s with 60 `sub_` symbols in `.symtab` or in raw strings, a renamed "game file", bitcode, images, a tar with an escaping symlink, a wheel with a lifted `.so`) and root_check cases.
+
+**root_check** (`tools/release/root_check.py`, new): reads the index and refuses:
+- `media/`, `private/`, and anything under `external/` but the gitlink;
+- a `.gitmodules` naming other submodules;
+- blobs over 5 MB;
+- PE, ELF and bitcode blobs, and forbidden suffixes;
+- a non-text `.obj` (the roomrun examples are Wavefront text);
+- images outside `roomrun/examples/png/`.
+
+Result: 203 files with every pending change added (checked in a scratch index), OK.
+
+**The app without the game** (`tools/release/ci_app.sh`, new; CI's app job runs it).
+- **Validated end to end here against a fresh `git clone` of the fork, with no `private/`:** `RELEASE_BUILD_ARM64_OK`, then `KIT_OK`, then `SCAN_OK`, then `CI_APP_OK`, in about 4 min after the deps.
+- **Result:** `sa2mr-app-linux-aarch64.tar.gz`, 22 MB (74 MB unpacked, 1,683 files). It holds the release (players including DXVK and XR, `sa2-install` and `sa2recomp` built from the tracked install table), `kit/` with `toolchain.json`, `frame/`, `sa2mr-vr.sh` and `share/game.env.vr`.
+- **Steps:** it builds the x86_64 glslang 16.6.0 from the pinned archive, fetches the arm64 deps' sources (DXVK cloned at `b1a1c99a` with its submodules), runs `build_deps.sh`, and makes a fresh arm64 pins overlay. Then it runs `release_build_arm64.py --only players,install,launch,assemble,package --no-game`.
+- **Guard:** it refuses a tree with anything in `private/` other than `generated/s7` and the empty mount point.
+- `build-env/cross/run.sh` takes overrides (`SA2MR_OPENSA2`, `SA2MR_ARM64_S5`, `SA2MR_X86_S5`, `SA2MR_SYSROOT`, `SA2MR_ARM64_PINS`, `SA2MR_NO_GAME`). The SA2 folder is mounted only when it exists and `SA2MR_NO_GAME` is unset.
+- The sysroot extraction moved to `build-env/arm64/make_sysroot.sh` (`build_release.sh` calls it).
+
+**Workflow** (`.github/workflows/frame.yml`, new; actionlint 1.7.7 clean, `workflow_lint.py` OK). It has six jobs:
+- **guard:** OpenSA2 `public_check` (1,655 files, 0 failures in a fresh clone), root_check, both unit test suites, `workflow_lint.py`, actionlint and shellcheck.
+- **toolchain:** x86 cross build, the proven route. It is built only when no prerelease `toolchain-<id>` exists. `<id>` comes from `tools/release/toolchain_id.sh`, a hash of the build scripts, locks, Dockerfiles and the sysroot pin; today it is `e6ded27fe779`. The remill prefix and the sha-pinned downloads are cached under `actions/cache`, keyed on the remill inputs; `build.sh --reuse-remill` uses the restored prefix. `ref_ll.sh` makes the x86 reference IR from upstream's package, which matches this machine's earlier aarch64 lift byte for byte.
+- **toolchain-verify:** native `verify.sh` on `ubuntu-24.04-arm`, with `REF_LL`.
+- **toolchain-publish:** `gh release create toolchain-<id> --prerelease`.
+- **app:** writes `toolchain.json` from that release's `.sha256`, required on `v*` tags.
+- **release:** on `v*` tags; a `-` in the tag makes it a prerelease. Assets: `Install-SA2MR.desktop`, `Uninstall-SA2MR.desktop`, `sa2mr-app-linux-aarch64.tar.gz`, `toolchain.json` and `SHA256SUMS`.
+
+Only `GITHUB_TOKEN` is used, and only `actions/*@v4`. `build-env/frame-toolchain/build.sh`'s BUILDINFO now names the SDK image digest instead of the local sysroot path, so the tarball's sha256 differs from `a9d21925…`.
+
+**Installer** (`platforms/steam-frame/install.sh`, `Install-SA2MR.desktop`, `Uninstall-SA2MR.desktop`, new).
+- **Flow:** release lookup, then `SHA256SUMS`, then an unpack under `~/.local/share/sa2mr` (never `/tmp`). Then `rsync --delete` into `~/Applications/sa2mr`, keeping `bin/sa2-game`, `logs/`, `share/game.env.local`, `.release` and the device's `cpu-needs.txt` and `sa2-game.build.json`. Then the detached `systemd-run --user --unit=sa2mr-build … systemd-inhibit …` builder, and following `progress.json` until it ends.
+- **Other paths:** an already-running unit is attached to; the same release resumes an unfinished build, or says "up to date" when it is built; `--status`, `--uninstall` and `--purge` (which asks first).
+- **The `.desktop` files** are valid (`desktop-file-validate`). GLib's `gio launch` passes `konsole --hold -e bash -c '<curl … && SA2MR_FROM_DESKTOP=1 bash /tmp/sa2mr-install.sh>'` exactly, with `x-terminal-emulator` and then no terminal as fallbacks.
+- **Tested in a Debian container** (fake HOME, local package, foreground builder):
+  - a bad sum is refused;
+  - a fresh install lays out the app and runs the builder, which stops at preflight; the failure is reported with the log tail;
+  - the same package resumes, an update keeps the device files and deletes stray ones, and `--status` works;
+  - the real GitHub lookup answers "no release … yet";
+  - `--uninstall` keeps the saves, `--purge` refuses without confirmation and then removes them;
+  - x86 is refused.
+- shellcheck (all levels) is clean.
+
+**Not yet run:**
+- the workflow on GitHub (nothing is committed or pushed);
+- `build.sh --native`, not needed, since CI cross-builds and verifies natively;
+- the systemd-run path, which was only exercised in foreground mode;
+- konsole on KDE;
+- the installer on a real Frame.

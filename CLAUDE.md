@@ -12,14 +12,18 @@ A VR / mixed-reality mod of **Sonic Adventure 2** for the **Valve Steam Frame**,
 - **Room Run generator:** `roomrun/`, a standalone C++17 library plus CLIs, later linked into the XR host.
 
 **Git (user decision, 2026-11-21): commit your work at verified, stable points.**
-- **The project root** is a git repo on `main`. `external/`, `media/` (game screenshots), toolchains and logs are gitignored.
-- **Push the root's `main` to `origin` (`git@github.com:jonnyczi/sa2mr.git`) after each commit** (user decision, 2026-11-22). OpenSA2's branches have no remote of ours and are not pushed.
-- **`external/OpenSA2`** is its own checkout. Our changes go on its **`sa2mr`** branch; `main` tracks upstream. Follow its `AGENTS.md`: no tool or assistant attribution trailers, and run `python3 tools/public_check.py` before every commit.
+- **The project root** is a git repo on `main`. `media/` (game screenshots), toolchains, logs and everything under `external/` but the OpenSA2 submodule are gitignored.
+- **Push the root's `main` to `origin` (`git@github.com:jonnyczi/sa2mr.git`, public) after each commit** (user decision, 2026-11-22).
+- **`external/OpenSA2`** is a **git submodule** of the root (`.gitmodules`: `https://github.com/jonnyczi/OpenSA2.git`, branch `sa2mr`; `ignore = dirty`), the same checkout as before, with its own `.git` (54 GB ignored `private/`, local `pr/*` branches). Our changes go on its **`sa2mr`** branch; `main` tracks upstream.
+  - Follow its `AGENTS.md`: no tool or assistant attribution trailers, and run `python3 tools/public_check.py` before every commit.
+  - **Push `sa2mr` to the public fork** (remote `jonnyczi`, `github.com/jonnyczi/OpenSA2`) once `public_check.py` passes. The `pr/*` branches and `main` are not pushed there.
+  - **The root pins the submodule to a `sa2mr` commit.** When you commit fork changes, push them, then bump the pin in the root (`git add external/OpenSA2`, or `git update-index --cacheinfo 160000,<sha>,external/OpenSA2`) and commit that too. CI checks out the pinned commit.
+- **CI** (`.github/workflows/frame.yml`, the plan's Phase 3) builds the Frame toolchain and app and publishes releases on `v*` tags. It never has the game. `tools/release/sa2mr_scan.py` runs before every upload; `tools/release/root_check.py` guards what the root tracks (no `media/`, no binaries, `external/` only the submodule).
 - **Never commit proprietary code or assets:**
   - no SEGA exe, or anything generated or translated from it;
   - nothing under OpenSA2's `private/`;
   - no extracted meshes, textures or shaders;
-  - no game screenshots;
+  - no game screenshots (and never in a release asset: upstream tracks `docs/screenshots/*.png` of the game in the fork, so `make_kit.sh` leaves them out and the scanner refuses images);
   - not the regenerated `Documentation/receipts/s1-function-map-v1.json`.
 
   Check `git diff --cached --stat` before each commit.
@@ -60,6 +64,8 @@ build-env/monado.sh &                   # simulated OpenXR headset (prints XR_RU
 XR_RUNTIME_JSON=... build-env/play-xr.sh   # VR player (SA2_XR_MODE=diorama, etc.; see host/xr/README.md)
 build-env/pace-stats.sh [N|session]     # frame pacing of recent sessions (fps, >25 ms, game-behind)
 roomrun/build.sh                        # build + tests of the generator; roomrun/run.sh ./build/roomrun-gen ...
+tools/release/ci_app.sh OUT             # the Frame app tarball, no game (SA2MR_OPENSA2=<fresh clone of the fork>)
+python3 tools/release/sa2mr_scan.py --profile app|toolchain|kit PATH   # SCAN_OK before any upload
 ```
 
 Use the project skills for the multi-step workflows: `opensa2-build`, `run-and-measure`, `xr-dev`, `frame-deploy`, `roomrun`.

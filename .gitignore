@@ -1,5 +1,7 @@
-# OpenSA2 is its own git repo (our changes live on its sa2mr branch).
-/external/
+# external/: local clones and toolchains stay out, except the OpenSA2 fork, a submodule
+# (github.com/jonnyczi/OpenSA2, branch sa2mr; its own .gitignore keeps private/ out).
+/external/*
+!/external/OpenSA2
 
 # Screenshots and eye dumps show SEGA's game content, and are large: keep them local.
 /media/
@@ -13,3 +15,6 @@
 
 # Local Claude settings
 /.claude/settings.local.json
+
+# Python bytecode
+__pycache__/
