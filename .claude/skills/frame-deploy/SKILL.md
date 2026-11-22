@@ -68,6 +68,10 @@ build-env/arm64/frame_deploy.sh log | fetch DIR | stop
   against the CPU's HWCAPs and refuses by name (`SA2_CPU_CHECK=0` tries anyway). A check inside the game is too late.
 - **Wild Canyon (round 4):** game-CPU bound on the A720s (13-17 ms a frame) with `draw-distance` on; `frame_perf.sh wcsuite`
   is its headless A/B (placement, draw distance, alt builds).
+  - **Results (frame-perf5, 2026-11-22), game ms a tick on an A720:**
+    - draw distance 2×: 11.5; 1.25×: 9.2; normal: 8.4. On the X4 at 2×: 9.7.
+    - The generic armv8 build is the same as cortex-a720 (so `-mcpu` gains nothing). The hot-function-ordered build is −4%.
+  - **Live Wild Canyon with normal draw distance and auto-placement: 59.9 fps, 24 frames over 25 ms in 23k, the relay at 60.0.** This is the working Frame setup (the user's decision: normal draw distance).
 - **Profiling on the headset:** scratchpad `frameprof/frame_perf.sh` (push, info, suite, live, fetch; a bundled Debian
   arm64 perf). Ask before running anything on the Frame.
 - **Frame specifics to expect:**
