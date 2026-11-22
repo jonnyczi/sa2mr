@@ -847,3 +847,7 @@ See `host/xr/README.md`, "Dynamic resolution and the Frame's foveation".
   threads on CPUs 2 and 3. Public check passes.
 - **Not done:** draw batching (xelee's `AURORA_XR_BATCH`) and our own density map: the next GPU steps if the scale is
   not enough.
+
+**User decision (2026-11-22): the eyes always at full 2160² sharpness.**
+- In frame-r11, dynamic resolution (down to 0.65) made the slow spot "about the same", and the picture was "noticeably worse".
+- `SA2_XR_RES_DYNAMIC` stays off by default. Don't use resolution as a performance fix; reduce the GPU's per-draw cost instead.
