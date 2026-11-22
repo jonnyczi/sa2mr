@@ -68,6 +68,11 @@ build-env/arm64/frame_deploy.sh log | fetch DIR | stop
   - Passthrough is grayscale (`ALPHA_BLEND`).
   - Controller profile `valve/frame_controller_valve` (bumper/shoulder name variants).
   - No hand tracking, no scene mesh.
-  - **CPU (profiled 2026-11-21, City Escape replay, heavy part):** cpu0-1 Cortex-A520 (2.27 GHz), cpu2-4 A720 (3.15 GHz), cpu5-6 A720 (2.96 GHz), **cpu7 X4 (3.05 GHz, capacity 1024) = the fastest core**. The game's CPU time per frame: default scheduling 12.7-13.0 ms, pinned to cpu4 12.6 ms, **pinned to cpu7 10.0 ms (-22%)**, pinned to cpu0 49 ms. A memfast build made no difference. The CRI reverb (`__wrap_sub_843460`) is 13.6% of the game's CPU on the Frame. Pin with `SA2_GUEST_HOST_CPUS=7` in `game.env`. The suite kit is in the scratchpad `frameprof/`, and results in `frame-perf3/`.
+  - **CPU (profiled 2026-11-21, City Escape replay, heavy part):** cpu0-1 Cortex-A520 (2.27 GHz), cpu2-4 A720 (3.15 GHz), cpu5-6 A720 (2.96 GHz), **cpu7 X4 (3.05 GHz, capacity 1024) = the fastest core**. The game's CPU time per frame: default scheduling 12.7-13.0 ms, pinned to cpu4 12.6 ms, **pinned to cpu7 10.0 ms (-22%)**, pinned to cpu0 49 ms. A memfast build made no difference. The CRI reverb (`__wrap_sub_843460`) is 13.6% of the game's CPU on the Frame. **Pinning live made things worse (2026-11-22):**
+- Pinning the game to 7 alone gave 55 fps, the game behind on most frames.
+- Adding `taskset -c 0-6` for the launcher and player gave 38.9 fps: the player's main thread ran on the A520s more than half the time.
+- The player main thread is the other heavy single thread, and the compositor's RT RenderThread sits on 4-6.
+- The default (no pin) holds about 59 fps. If you pin, rank cores by `cpu_capacity`, never by max clock, and keep both heavy threads off 0-1. The next candidate is the game on 2-3 and the player under `taskset -c 5-7`.
+- Choppy music = fps below 60 (the game makes one frame of sound per Present). The suite kit is in the scratchpad `frameprof/`, and results in `frame-perf3/`.
 
 Record anything new you learn about the Frame in `BUILD_NOTES.md` (ARM64 section) and in this skill.
