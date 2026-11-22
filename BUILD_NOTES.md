@@ -715,3 +715,28 @@ See `host/xr/README.md`, "Dynamic resolution and the Frame's foveation".
   density-map extensions.
 - **Files:** `host/xr/xr_gpu.cpp`, `host/xr/xr_gloves.{h,cpp}` (`set_view`), `host/xr/xr_vk.cpp` (extension logs),
   `host/xr/README.md`. No upstream file.
+
+## Performance round 7: late frames no longer slow the game; dynamic resolution reacts to misses (2026-11-22, `frame-dyn1`)
+
+- **The Frame (94ebd0f0, run A, City Escape):** pace 59.3 mean, dips to 51-54, and the music slowing with them. At the
+  dips the game took 9-10.5 ms a frame and waited 17.8-18.1 ms on the player (the relay's "reader held"). The player's
+  thread was not starved (360 ms/s CPU, 53 ms/s waiting); its Present waited in SDL for the frame two back on the GPU.
+  Our GPU timestamps read 20 ms a game frame in the worst stretch (frames ~6500-6610) at scale 0.88-0.78, while the
+  same frames take 8.3 ms when the GPU is ours: the compositor's work (120 Hz reprojection, passthrough) lands between
+  our timestamps. xrWaitFrame's period swung 120/60/40 Hz many times a second there. The cause: the GPU shared with
+  the compositor runs out, our Present blocks on it, and the lockstep (relay lead 1) passes the stall to the game and its
+  sound. Dynamic resolution did step down but came back to 1.00 within ~100 frames each time (budget 11 ms, 30-frame
+  windows, up after 90 calm frames), into the next heavy stretch.
+- **Fixes** (`host/xr/xr_gpu.cpp`, `host/launch/sa2_launch.cpp`; README "Frames the GPU has no room for" and
+  "Dynamic resolution"):
+  - frames the GPU has no room for are applied but not drawn or shown (`SA2_XR_SKIP`, default on): the player never
+    waits on the GPU, the XR thread repeats the newest drawn frame;
+  - the relay lead is 2 for the VR player (`SA2_RELAY_LEAD`; flat keeps 1);
+  - dynamic resolution: 10-frame windows, an immediate step down on a longer display period (the runtime throttling),
+    up only after 300 calm frames; budget 9 ms, minimum 0.65; period logs once a second at most;
+  - `SA2_XR_TIMING` counts the eyes' render passes and their breaks (offline City Escape 1-4 a frame).
+- **Verified (x86, Monado):** a simulated 25 ms GPU (`SA2_XR_TEST_GPU_MS=25`): with the old waiting 40.0 game frames a
+  second, audio queue 2.7 ms; with skipping 59.7-60.0, queue 41.8 ms. No stall: no frame skipped, 59.7 fps. Offline
+  eyes pixel-identical at scale 1 (1280×720 and 1600²). Public check passes. The flat player's path is unchanged (lead
+  1, the d3d9gpu untouched).
+- **Upstream file modified:** `host/launch/sa2_launch.cpp` (the relay's lead for VR).

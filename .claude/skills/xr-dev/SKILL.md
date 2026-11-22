@@ -176,6 +176,9 @@ Read `external/OpenSA2/host/xr/README.md` first. It holds the measured camera fi
     - **eye resolution:** the eyes have their own size (`SA2_XR_EYE_RES`, `SA2_XR_RES_SCALE`; README "Eye
       resolution"); Monado's maximum is 1920x1080, so test bigger sizes offline (`SA2_XR_SIM_FOV=100` for a square
       view, `SA2_XR_GPU_SYNC=1` with `SA2_XR_TIMING=1` for GPU time);
+    - **late GPU frames:** the player skips frames the GPU has no room for (`SA2_XR_SKIP=0` waits) and the relay leads
+      by 2 in VR (`SA2_RELAY_LEAD`); test with `SA2_XR_TEST_GPU_MS=25` under Monado: the game must stay at 60 and the
+      audio queue (pace.tsv) above ~20 ms; player.err "frames the GPU had no room for" counts skips;
     - **every character:** vr-sonic wraps the three player mains (`0x00717840`, `0x00728D70`, `0x00741530`) and
       gets the four other player displays through hide-upgrade-models; head nodes per display in
       docs/vr-game-hooks.md section 13. Test other characters with `STAGE=16` (Wild Canyon), `drylagoon`,

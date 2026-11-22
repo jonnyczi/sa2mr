@@ -88,6 +88,9 @@ build-env/arm64/frame_deploy.sh log | fetch DIR | stop
 - Adding `taskset -c 0-6` for the launcher and player gave 38.9 fps: the player's main thread ran on the A520s more than half the time.
 - The player main thread is the other heavy single thread, and the compositor's RT RenderThread sits on 4-6.
 - The default (no pin) holds about 59 fps. If you pin, rank cores by `cpu_capacity`, never by max clock, and keep both heavy threads off 0-1. **The game on 2-3 with the player under `taskset -c 5-7` works** (frame-place2): 58.8 fps over a 5-minute session, the relay at a steady 60.0 fps, the game's CPU 8-10 ms a frame. The user reported "much better" frame rate and music. That run's `game.env` keeps `SA2_GUEST_HOST_CPUS=2-3`; launch with `FRAME_ENV="SA2_XR=1 SA2_XR_MODE=auto taskset -c 5-7"`.
+- Late GPU frames (round 7): the VR player skips frames the GPU has no room for instead of waiting, so the game and its music
+  should hold 60 even when the headset's GPU runs out; check player.err "frames the GPU had no room for" and "dynamic
+  resolution: ... the runtime throttled". `SA2_XR_SKIP=0 SA2_RELAY_LEAD=1` restores the old lockstep for an A/B.
 - Choppy music = fps below 60 (the game makes one frame of sound per Present). The suite kit is in the scratchpad `frameprof/`, and results in `frame-perf3/`.
 
 Record anything new you learn about the Frame in `BUILD_NOTES.md` (ARM64 section) and in this skill.
