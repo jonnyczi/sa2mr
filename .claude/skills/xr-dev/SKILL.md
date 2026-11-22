@@ -170,8 +170,11 @@ Read `external/OpenSA2/host/xr/README.md` first. It holds the measured camera fi
       `roomrun-gen --area W,D,UX,UY --sonic-cm 14.8 --player-r 0.3`.
   - **Room Run objects at half size (the user's decision):**
     - draws: `T(0,0,−60) S(k) T(0,0,60)` (the trampoline puts the object at (0,0,−60));
-    - collision: a scaled private copy of each object's shape array (CollisionInfo `+0x0C`, count `+0x06`, range
-      `+0x08`; 48-byte shapes);
+    - collision: each object's shape array (CollisionInfo `+0x0C`, count `+0x06`, range `+0x08`; 48-byte shapes)
+      scaled. **Scale a heap array in place:** the game frees it with the object, so a replacement pointer of ours
+      trapped in HeapFree (frame-place2). Only static arrays (the dash panel's `0x00B43EAC`) are copied;
+    - enemy displays test the **camera location** (`[0x01DD92B0 + 4*screen]`, `0x007983F0`), not the view matrix:
+      the trampoline moves it next to the object for the call, as it does the view;
     - `SA2_XR_ROOM_RUN_OBJECT_SCALE`, channel version 12.
   - **Course choice:** the generator's pick flips with tiny scale changes (10.12 vs 10.14 cm). The player keeps the
     most vertical of 9 seeds when the first isn't vertical.

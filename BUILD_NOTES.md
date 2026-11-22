@@ -535,3 +535,19 @@ See `host/xr/README.md`, "The Frame's second portal test" and "Room Run objects 
   (`rr_object_scale`).
 - **Files:** `host/xr/xr_portal.{h,cpp}`, `host/xr/xr_gpu.cpp`, `host/xr/xr_roomrun.cpp`, `host/xr/README.md`,
   `host/sa2_vr_hands.h`, `runtime/tweaks/vr-sonic.c`. No upstream file.
+
+## Portal and Room Run, third Frame test (2026-11-22, `frame-place2`)
+
+See `host/xr/README.md`, "The Frame's third portal test".
+- **Crash when Sonic left the course:** the game HeapFree'd our arena copy of a spring's or Beetle's collision shapes when the
+  course was removed. Heap-owned shape arrays are now scaled in place; only static ones (the dash panel's) are copied.
+  Verified offscreen with no trap: removal by drop in the window, pause-menu Restart, Exit to menu, all with objects alive.
+  `SA2_VR_RR_COL_COPY=1` reproduces the old trap.
+- **The game instead of the room near the glass from inside:** the hole's mark pass now writes its true depth, clamped to
+  0..1, from the fragment shader (`portal.vert`/`portal.frag`). It no longer clamps the vertices' clip z.
+- **No enemies:** the Beetle was spawned but its display was skipped by the game's camera-location visibility test. Room
+  objects' display trampolines now move the camera location next to the object for the call, as they already did the view.
+- **Files:** `host/xr/shaders/portal.{vert,frag}`, `host/xr/xr_glove_spv.h`, `host/xr/xr_gpu.cpp` (logging),
+  `host/xr/README.md`, `runtime/tweaks/vr-sonic.c`. No upstream file.
+- **Checks:** `test_tweaks` 137 passed; public check 0 failures; flat `SA2_SELFTEST_OK` (offscreen); `RELEASE_BUILD_OK`,
+  `XR_BUILD_OK`, `GLOVE_SPV_OK`.
