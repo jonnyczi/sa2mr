@@ -884,3 +884,14 @@ See `host/xr/README.md`, "Dynamic resolution and the Frame's foveation".
 **User decision (2026-11-22): the eyes always at full 2160² sharpness.**
 - In frame-r11, dynamic resolution (down to 0.65) made the slow spot "about the same", and the picture was "noticeably worse".
 - `SA2_XR_RES_DYNAMIC` stays off by default. Don't use resolution as a performance fix; reduce the GPU's per-draw cost instead.
+
+**Frame result (2026-11-22, frame-r13, 6d2f41c0): City Escape at full 2160² is smooth.**
+- 59.9 fps over 17,199 frames. Only 34 frames over 25 ms and 135 late arrivals (it was 279 and 827 in frame-r10).
+- The game's frames over 16.7 ms: 21 in the whole run. Audio queue under 5 ms: 0 frames.
+- GPU 6.2-8 ms a game frame at the slow spot (10.5-13 at 0.65 scale before). Only 53 frames skipped (535 before).
+- The user: "I didn't notice any lag".
+- What fixed it, all in the VR player:
+  - Turnip direct rendering (`TU_DEBUG=sysmem`);
+  - the draw thread;
+  - the game on the X4;
+  - normal draw distance.
