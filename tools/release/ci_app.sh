@@ -67,6 +67,15 @@ if [ -d "$R/private" ]; then
   done
 fi
 mkdir -p "$R/private/generated/s7"
+# A submodule checkout's .git is a file naming the superproject's .git/modules, which the build
+# containers (the tree mounted at /work) cannot see; git then fails there, even `hash-object`.
+# Give the tree its own .git directory.
+if [ -f "$R/.git" ]; then
+  gd="$(git -C "$R" rev-parse --absolute-git-dir)"
+  rm "$R/.git" && cp -a "$gd" "$R/.git"
+  git config -f "$R/.git/config" --unset core.worktree || true
+  git -C "$R" status --short >/dev/null || die "could not give $R its own .git"
+fi
 
 # ---- 1. images, sysroot ---------------------------------------------------------------------
 step "images and the sniper arm64 sysroot"
